@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "skill_id": "e7f81c89-2443-4a99-96f7-e848fde76980",
+  "path": "fastapi-pro-expert",
+  "path_key": "fastapi-pro-expert",
+  "enabled": true,
+  "tags": [
+    "Python",
+    "框架",
+    "编程"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

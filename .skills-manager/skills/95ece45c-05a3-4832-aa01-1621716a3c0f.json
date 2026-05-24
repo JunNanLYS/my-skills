@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill_id": "95ece45c-05a3-4832-aa01-1621716a3c0f",
+  "path": "docker-container-usage-faq",
+  "path_key": "docker-container-usage-faq",
+  "enabled": true,
+  "tags": [
+    "容器",
+    "编程"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

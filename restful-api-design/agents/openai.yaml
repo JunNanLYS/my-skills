@@ -1,0 +1,4 @@
+interface:
+  display_name: "RESTful API Design"
+  short_description: "Design and review RESTful APIs."
+  default_prompt: "Design or review a RESTful API with consistent resources, HTTP methods, status codes, pagination, errors, security, and OpenAPI documentation."

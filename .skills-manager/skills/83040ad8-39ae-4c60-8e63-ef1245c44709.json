@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill_id": "83040ad8-39ae-4c60-8e63-ef1245c44709",
+  "path": "wechat-open-platform",
+  "path_key": "wechat-open-platform",
+  "enabled": true,
+  "tags": [
+    "微信",
+    "编程"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}
