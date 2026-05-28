@@ -4,7 +4,9 @@
   "path": "neodata-financial-search",
   "path_key": "neodata-financial-search",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "金融"
+  ],
   "source": {
     "type": "local",
     "ref": null,

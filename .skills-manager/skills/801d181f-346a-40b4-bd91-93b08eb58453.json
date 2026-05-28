@@ -4,7 +4,9 @@
   "path": "tencent-news",
   "path_key": "tencent-news",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "新闻"
+  ],
   "source": {
     "type": "local",
     "ref": null,

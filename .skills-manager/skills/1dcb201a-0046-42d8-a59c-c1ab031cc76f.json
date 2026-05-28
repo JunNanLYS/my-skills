@@ -4,7 +4,9 @@
   "path": "DOCX",
   "path_key": "docx",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "工具"
+  ],
   "source": {
     "type": "local",
     "ref": null,

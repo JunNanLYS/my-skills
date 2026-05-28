@@ -4,7 +4,9 @@
   "path": "news-summary",
   "path_key": "news-summary",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "新闻"
+  ],
   "source": {
     "type": "local",
     "ref": null,

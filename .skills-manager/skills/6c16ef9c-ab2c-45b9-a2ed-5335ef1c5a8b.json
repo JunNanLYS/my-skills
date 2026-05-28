@@ -4,7 +4,9 @@
   "path": "remotion-video-toolkit",
   "path_key": "remotion-video-toolkit",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "动画"
+  ],
   "source": {
     "type": "local",
     "ref": null,

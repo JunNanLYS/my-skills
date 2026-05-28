@@ -4,7 +4,9 @@
   "path": "Self-Improving + Proactive Agent",
   "path_key": "self-improving + proactive agent",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "Agent提升"
+  ],
   "source": {
     "type": "local",
     "ref": null,

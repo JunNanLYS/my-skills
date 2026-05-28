@@ -4,7 +4,11 @@
   "path": "westockdata",
   "path_key": "westockdata",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "基金",
+    "股票",
+    "金融"
+  ],
   "source": {
     "type": "local",
     "ref": null,
