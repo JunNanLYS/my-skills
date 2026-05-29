@@ -5,6 +5,7 @@
   "path_key": "tencent-news",
   "enabled": true,
   "tags": [
+    "CLI",
     "新闻"
   ],
   "source": {
