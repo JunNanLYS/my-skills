@@ -4,7 +4,11 @@
   "path": "html-ppt",
   "path_key": "html-ppt",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "HTML",
+    "PPT",
+    "工具"
+  ],
   "source": {
     "type": "skillssh",
     "ref": "lewislulu/html-ppt-skill/html-ppt",
