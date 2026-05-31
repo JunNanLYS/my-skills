@@ -4,7 +4,9 @@
   "path": "drawio-2",
   "path_key": "drawio-2",
   "enabled": true,
-  "tags": [],
+  "tags": [
+    "工具"
+  ],
   "source": {
     "type": "skillssh",
     "ref": "jgraph/drawio-mcp/drawio",

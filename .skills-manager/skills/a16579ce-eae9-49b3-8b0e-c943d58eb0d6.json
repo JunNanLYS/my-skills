@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "skill_id": "a16579ce-eae9-49b3-8b0e-c943d58eb0d6",
+  "path": "markdown-converter",
+  "path_key": "markdown-converter",
+  "enabled": true,
+  "tags": [
+    "工具"
+  ],
+  "source": {
+    "type": "skillssh",
+    "ref": "intellectronica/agent-skills/markdown-converter",
+    "subpath": "skills\\markdown-converter",
+    "branch": null
+  }
+}
