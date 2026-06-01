@@ -14,6 +14,7 @@ Usage:
 
 import argparse
 import json
+import base64
 import os
 import stat
 import sys
@@ -61,6 +62,24 @@ def _read_token_file() -> Optional[str]:
         print("TOKEN_MISSING: 本地缓存缺少凭证内容，需要获取凭证", file=sys.stderr)
         return None
 
+    # 优先检查 JWT 的 exp 声明，JWT 有效则无需重新获取
+    is_jwt = credential.count(".") == 2  # 三段结构
+    if is_jwt:
+        try:
+            payload_enc = credential.split(".")[1]
+            # 补全 Base64 padding
+            pad = 4 - len(payload_enc) % 4
+            if pad != 4:
+                payload_enc += "=" * pad
+            jwt_payload = json.loads(base64.urlsafe_b64decode(payload_enc))
+            jwt_exp = jwt_payload.get("exp", 0)
+            if time.time() < jwt_exp:
+                # JWT 未过期，忽略 saved_at，直接返回
+                return credential
+        except Exception:
+            pass  # 解码失败，回退到时间戳检查
+
+    # 非 JWT 或解码失败，走原来的 saved_at 检查
     if time.time() - saved_at > TOKEN_TTL_SECONDS:
         print("TOKEN_EXPIRED: 本地缓存凭证已超过 12 小时，需要重新获取凭证", file=sys.stderr)
         return None
@@ -136,7 +155,7 @@ def main():
     # --save-token 模式：保存后退出。
     if args.save_token:
         _save_token_file(args.save_token)
-        print(f"凭证已保存到 {TOKEN_FILE}（有效期 12 小时）")
+        print(f"凭证已保存到 {TOKEN_FILE}")
         return
 
     if not args.query:
