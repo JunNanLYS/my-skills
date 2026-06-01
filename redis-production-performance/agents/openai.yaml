@@ -1,0 +1,4 @@
+interface:
+  display_name: "Redis Production Performance"
+  short_description: "High-performance Redis production guidance."
+  default_prompt: "Use $redis-production-performance to design, review, or troubleshoot a production Redis system for performance, safety, memory, persistence, clustering, pub/sub, atomics, and connection management."
