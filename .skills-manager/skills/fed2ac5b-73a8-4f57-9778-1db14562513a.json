@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill_id": "fed2ac5b-73a8-4f57-9778-1db14562513a",
+  "path": "code-review",
+  "path_key": "code-review",
+  "enabled": true,
+  "tags": [
+    "审查",
+    "编程"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

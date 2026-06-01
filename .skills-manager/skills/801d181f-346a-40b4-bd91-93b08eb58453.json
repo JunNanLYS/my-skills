@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill_id": "801d181f-346a-40b4-bd91-93b08eb58453",
+  "path": "tencent-news",
+  "path_key": "tencent-news",
+  "enabled": true,
+  "tags": [
+    "CLI",
+    "新闻"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

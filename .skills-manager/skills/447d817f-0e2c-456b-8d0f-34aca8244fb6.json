@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "skill_id": "447d817f-0e2c-456b-8d0f-34aca8244fb6",
+  "path": "fastapi-backend-tester",
+  "path_key": "fastapi-backend-tester",
+  "enabled": true,
+  "tags": [
+    "Python",
+    "框架",
+    "编程"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

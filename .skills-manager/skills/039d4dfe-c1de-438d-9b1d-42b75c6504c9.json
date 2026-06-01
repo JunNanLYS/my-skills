@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill_id": "039d4dfe-c1de-438d-9b1d-42b75c6504c9",
+  "path": "redis-production-performance",
+  "path_key": "redis-production-performance",
+  "enabled": true,
+  "tags": [
+    "中间件",
+    "编程"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

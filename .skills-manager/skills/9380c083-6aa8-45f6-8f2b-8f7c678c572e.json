@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "skill_id": "9380c083-6aa8-45f6-8f2b-8f7c678c572e",
+  "path": "skill-vue3",
+  "path_key": "skill-vue3",
+  "enabled": true,
+  "tags": [
+    "Vue3",
+    "编程",
+    "规范"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

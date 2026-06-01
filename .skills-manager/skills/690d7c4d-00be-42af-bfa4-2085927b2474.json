@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "skill_id": "690d7c4d-00be-42af-bfa4-2085927b2474",
+  "path": "multi-search-engine",
+  "path_key": "multi-search-engine",
+  "enabled": true,
+  "tags": [
+    "工具",
+    "搜索"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

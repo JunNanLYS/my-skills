@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "skill_id": "ebf50ff6-49a8-4067-8d58-4427c84167d7",
+  "path": "westockdata",
+  "path_key": "westockdata",
+  "enabled": true,
+  "tags": [
+    "基金",
+    "股票",
+    "金融"
+  ],
+  "source": {
+    "type": "local",
+    "ref": null,
+    "subpath": null,
+    "branch": null
+  }
+}

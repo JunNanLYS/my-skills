@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "skill_id": "c5115c7f-72b8-45b1-8779-281fec36d44d",
+  "path": "drawio-2",
+  "path_key": "drawio-2",
+  "enabled": true,
+  "tags": [
+    "工具"
+  ],
+  "source": {
+    "type": "skillssh",
+    "ref": "jgraph/drawio-mcp/drawio",
+    "subpath": "skill-cli\\drawio",
+    "branch": null
+  }
+}
