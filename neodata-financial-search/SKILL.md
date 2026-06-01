@@ -52,45 +52,57 @@ NeoData Financial Search 是由 FiT 支付金融平台与数据部提供的**自
 
 ## 鉴权
 
-凭证由脚本自动管理（本地缓存，12 小时有效期），**绝大多数情况下你无需关心鉴权细节，直接执行查询即可**。
+凭证存储在 ~/.workbuddy/.neodata_token，由脚本自动读取，**绝大多数情况下你无需关心鉴权细节，直接执行查询即可**。
 
 > ⚠️ 不要向用户展示或提及凭证的具体内容，静默处理即可。
+
+### 凭证类型
+
+connect_cloud_service 返回的凭证可能是以下两种之一，脚本会自动识别并采用不同的过期判断策略：
+
+| 类型 | 特征 | 有效期 | 过期判断 |
+|------|------|--------|---------|
+| **JWT**（Keycloak 签发的 JSON Web Token） | 三段式 header.payload.signature 结构，iss 为 codebuddy.cn | 约 **一年**（由 exp 声明决定） | 解码 JWT payload，检查 exp 字段 |
+| **tempToken**（云部署临时会话凭证） | 不透明字符串，非 JWT 格式 | 约 **12 小时**（本地策略估算） | 基于 saved_at 时间戳 + 12 小时 TTL |
+
+脚本优先检查 JWT —— 只要 exp 未到期，即使 saved_at 超过 12 小时也能正常使用。因此 **用户只需通过 WorkBuddy 获取一次凭证，即可使用数月之久**（直到 JWT 真正过期或被服务端吊销）。
 
 ### 默认行为：直接查询
 
 **第一步永远是直接执行查询**，不要提前获取凭证：
 
-```bash
+`ash
 python3 scripts/query.py --query "用户的查询"
-```
+`
 
 脚本会自动完成以下判断：
-- 缓存存在且未过期（< 12 小时）→ 自动使用缓存凭证，返回结果
-- 缓存不存在或已过期 → 脚本输出 `TOKEN_EXPIRED` 或 `TOKEN_MISSING` 提示
+- 缓存存在且凭证有效（JWT 未过期 / tempToken 未超 12h）→ 自动使用，返回结果
+- 缓存不存在或凭证已过期 → 脚本输出 TOKEN_EXPIRED 或 TOKEN_MISSING 提示，并指引用户通过 WorkBuddy 刷新
 
-**只有当脚本输出 `TOKEN_EXPIRED` / `TOKEN_MISSING`，或查询返回鉴权错误（401/403/40101）时**，才需要执行下方的「获取凭证」流程。
+**只有当脚本输出 TOKEN_EXPIRED / TOKEN_MISSING，或查询返回鉴权错误（401/403/40101）时**，才需要执行下方的「获取凭证」流程。
 
 ### 获取凭证（仅在脚本提示需要时执行）
 
-1. 调用 `connect_cloud_service` 工具（无参数）
-2. 从返回结果中提取凭证：**使用 `tempToken` 字段**；如果 `tempToken` 不存在或为空，则使用 `token` 字段
-3. 执行 `python3 scripts/query.py --save-token "<凭证>"` 保存到缓存文件
-4. 重新执行查询：`python3 scripts/query.py --query "用户的查询"`
+> ⚠️ 必须在 **WorkBuddy**（而非 Codex）中执行以下步骤，因为 connect_cloud_service 是 WorkBuddy 专属的原生工具，Codex 不具备该能力。
 
-> **凭证可能较长，禁止在 Bash 命令中明文内联。** 必须通过 `--save-token` 保存到文件后，由脚本自动读取。
+1. 调用 connect_cloud_service 工具（无参数）
+2. 从返回结果中提取凭证：**优先使用 	empToken 字段**；如果 	empToken 不存在或为空，则使用 	oken 字段（即 Keycloak JWT，有效期约一年）
+3. 执行 python3 scripts/query.py --save-token "<凭证>" 保存到缓存文件
+4. 切换回 Codex，重新执行查询：python3 scripts/query.py --query "用户的查询"
+
+> **凭证可能较长，禁止在 Bash 命令中明文内联。** 必须通过 --save-token 保存到文件后，由脚本自动读取。
 
 ### 鉴权错误重试
 
-当查询返回以下错误时，说明缓存凭证已失效，按上方「获取凭证」流程重新获取一次：
+当查询返回以下错误时，说明缓存凭证已失效，在 **WorkBuddy** 中按上方「获取凭证」流程重新获取一次：
 
 | 触发条件 | 说明 |
 |---------|------|
-| HTTP 401 / 403 | 凭证已过期或无效 |
-| JSON `code` 为 `40101` | 凭证验证失败 |
-| `msg` 包含"token"/"认证"/"鉴权" | 鉴权类错误 |
+| HTTP 401 / 403 | 凭证已过期或被服务端吊销 |
+| JSON code 为 40101 | 凭证验证失败 |
+| msg 包含 "token" / "认证" / "鉴权" | 鉴权类错误 |
 
 > 最多重试 **1 次**。两次失败说明是服务端问题，告知用户"金融数据服务暂时不可用"，停止重试。
-
 ## 服务端点
 
 - **URL**: `https://copilot.tencent.com/agenttool/v1/neodata`（代理）

@@ -6,7 +6,9 @@ Usage:
     python query.py --query "贵州茅台股价" --data-type api
     python query.py --save-token "<credential>"
 
-凭证优先级: --token 参数 > ~/.workbuddy/.neodata_token 缓存文件（12 小时有效期）
+凭证优先级: --token 参数 > ~/.workbuddy/.neodata_token 缓存文件
+# JWT 凭证有效期约一年（由 codebuddy.cn Keycloak 签发），脚本自动检测 JWT 的 exp 声明；
+# 非 JWT 临时凭证（tempToken）按 12 小时估算。过期请通过 WorkBuddy 调用 connect_cloud_service 刷新。
 
 环境变量 (可选):
     NEODATA_ENDPOINT - 代理 URL (可选，默认 https://copilot.tencent.com/agenttool/v1/neodata)
@@ -19,6 +21,7 @@ import os
 import stat
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -30,7 +33,9 @@ except ImportError:
 
 DEFAULT_ENDPOINT = "https://copilot.tencent.com/agenttool/v1/neodata"
 TOKEN_FILE = Path.home() / ".workbuddy" / ".neodata_token"
-TOKEN_TTL_SECONDS = 12 * 3600  # 12 小时
+TOKEN_TTL_SECONDS = 12 * 3600  # 12 小时（仅用于 tempToken，JWT 由 exp 声明判定）
+WBDY_HINT = "需要通过 WorkBuddy 调用 connect_cloud_service 获取凭证"
+WBDY_REFRESH = "需要通过 WorkBuddy 调用 connect_cloud_service 重新获取凭证"
 AUTH_ERROR_KEYWORDS = ("token", "认证", "鉴权", "凭证", "unauthorized", "forbidden")
 
 
@@ -39,31 +44,31 @@ def _read_token_file() -> Optional[str]:
     try:
         raw = TOKEN_FILE.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
-        print("TOKEN_MISSING: 未找到本地缓存凭证，需要获取凭证", file=sys.stderr)
+        print("TOKEN_MISSING: 未找到本地缓存凭证，需要通过 WorkBuddy 调用 connect_cloud_service 获取凭证", file=sys.stderr)
         return None
     except PermissionError:
-        print("TOKEN_MISSING: 无法读取本地缓存凭证，需要获取凭证", file=sys.stderr)
+        print("TOKEN_MISSING: 无法读取本地缓存凭证，需要通过 WorkBuddy 调用 connect_cloud_service 获取凭证", file=sys.stderr)
         return None
 
     if not raw:
-        print("TOKEN_MISSING: 本地缓存凭证为空，需要获取凭证", file=sys.stderr)
+        print("TOKEN_MISSING: 本地缓存凭证为空，需要通过 WorkBuddy 调用 connect_cloud_service 获取凭证", file=sys.stderr)
         return None
 
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         # 兼容旧格式：纯文本凭证无时间戳，视为过期，避免长期复用未知有效期凭证。
-        print("TOKEN_EXPIRED: 本地缓存为旧格式或格式异常，需要重新获取凭证", file=sys.stderr)
+        print("TOKEN_EXPIRED: 本地缓存为旧格式或格式异常，需要通过 WorkBuddy 调用 connect_cloud_service 获取凭证", file=sys.stderr)
         return None
 
     saved_at = data.get("saved_at", 0)
     credential = data.get("token", "")
     if not credential:
-        print("TOKEN_MISSING: 本地缓存缺少凭证内容，需要获取凭证", file=sys.stderr)
+        print("TOKEN_MISSING: 本地缓存缺少凭证内容，需要通过 WorkBuddy 调用 connect_cloud_service 获取凭证", file=sys.stderr)
         return None
 
-    # 优先检查 JWT 的 exp 声明，JWT 有效则无需重新获取
-    is_jwt = credential.count(".") == 2  # 三段结构
+    # 优先检查 JWT 的 exp 声明（codebuddy.cn Keycloak 签发，有效期约一年）
+    is_jwt = credential.count(".") == 2  # 三段式结构
     if is_jwt:
         try:
             payload_enc = credential.split(".")[1]
@@ -76,12 +81,16 @@ def _read_token_file() -> Optional[str]:
             if time.time() < jwt_exp:
                 # JWT 未过期，忽略 saved_at，直接返回
                 return credential
+            else:
+                exp_str = datetime.fromtimestamp(jwt_exp).strftime("%Y-%m-%d")
+                print(f"TOKEN_EXPIRED: JWT 凭证已于 {exp_str} 过期，{WBDY_REFRESH}", file=sys.stderr)
+                return None
         except Exception:
             pass  # 解码失败，回退到时间戳检查
 
     # 非 JWT 或解码失败，走原来的 saved_at 检查
     if time.time() - saved_at > TOKEN_TTL_SECONDS:
-        print("TOKEN_EXPIRED: 本地缓存凭证已超过 12 小时，需要重新获取凭证", file=sys.stderr)
+        print("TOKEN_EXPIRED: tempToken 凭证已超过 12 小时，需要通过 WorkBuddy 调用 connect_cloud_service 重新获取凭证", file=sys.stderr)
         return None
 
     return credential
@@ -131,13 +140,13 @@ def query_neodata(
 
     resp = requests.post(url, headers=headers, json=payload, timeout=30)
     if resp.status_code in (401, 403):
-        print(f"AUTH_ERROR: HTTP {resp.status_code}，凭证已失效或无权限", file=sys.stderr)
+        print(f"AUTH_ERROR: HTTP {resp.status_code}，凭证已被服务端拒绝，需要通过 WorkBuddy 调用 connect_cloud_service 重新获取凭证", file=sys.stderr)
         sys.exit(2)
 
     resp.raise_for_status()
     result = resp.json()
     if _looks_like_auth_error(result):
-        print("AUTH_ERROR: 服务返回鉴权错误，需要重新获取凭证", file=sys.stderr)
+        print("AUTH_ERROR: 服务返回鉴权错误，需要通过 WorkBuddy 调用 connect_cloud_service 重新获取凭证", file=sys.stderr)
         sys.exit(2)
 
     return result
@@ -148,7 +157,7 @@ def main():
     parser.add_argument("--query", "-q", default=None, help="自然语言查询")
     parser.add_argument("--token", "-t", default=None, help="凭证（优先级高于缓存文件）")
     parser.add_argument("--data-type", "-d", default="all", choices=["all", "api", "doc"], help="数据类型 (默认: all)")
-    parser.add_argument("--save-token", default=None, metavar="CREDENTIAL", help="将凭证保存到缓存文件（12 小时有效期）")
+    parser.add_argument("--save-token", default=None, metavar="CREDENTIAL", help="将凭证保存到缓存文件（JWT 有效期约一年，tempToken 约 12 小时）")
 
     args = parser.parse_args()
 
