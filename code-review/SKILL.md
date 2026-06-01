@@ -6,6 +6,14 @@ description: Systematic code review patterns covering security, performance, mai
 version: 1.0
 ---
 
+## Trigger
+
+Execute this skill when the user:
+- Mentions "审查" (review), "代码审查" (code review), "review", or "PR review"
+- Asks to fix issues discovered during a review ("修复审查发现的问题")
+
+---
+
 # Code Review Checklist
 
 Thorough, structured approach to reviewing code. Work through each dimension systematically rather than scanning randomly.
@@ -146,6 +154,44 @@ Work through the code in three passes. Do not try to catch everything in one rea
 
 ---
 
+## Review Output: `CODE_REVIEW.md`
+
+At the end of every review, output discovered issues to `CODE_REVIEW.md` in the project root directory (the root of the git repository or workspace).
+
+### Rules
+
+- **Ignore existing issues** — Before writing, read the existing `CODE_REVIEW.md`. Issues already present in the file must not be duplicated.
+- **Add new issues only** — Append only issues that are not already listed. Each issue entry includes:
+  - Severity level (`[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[NIT]`)
+  - File path and line range
+  - Clear description of the problem
+  - Suggested fix
+- Use a consistent format for each issue entry so it can be parsed later for fixing.
+
+### Format
+
+```markdown
+## Code Review Findings — YYYY-MM-DD
+
+### [SEVERITY] Short Title
+- **File:** `path/to/file.ext:NN`
+- **Problem:** Description of the issue.
+- **Fix:** Suggested resolution.
+```
+
+---
+
+## Fixing Review Issues
+
+When the user asks to fix issues discovered during a review:
+
+1. Read `CODE_REVIEW.md` from the project root.
+2. Identify unresolved issues (those not marked as fixed).
+3. Fix each issue, starting with `[CRITICAL]` and `[MAJOR]` items first.
+4. After fixing an issue, mark it as resolved in `CODE_REVIEW.md` (e.g., add `✅ Fixed` or a strikethrough).
+5. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why.
+
+---
 ## Severity Levels
 
 Classify every comment by severity so the author knows what blocks merge.
