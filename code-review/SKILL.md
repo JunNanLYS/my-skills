@@ -1,4 +1,4 @@
----
+﻿---
 name: code-review
 model: reasoning
 category: testing
@@ -185,11 +185,12 @@ At the end of every review, output discovered issues to `CODE_REVIEW.md` in the 
 
 When the user asks to fix issues discovered during a review:
 
-1. Read `CODE_REVIEW.md` from the project root.
-2. Identify unresolved issues (those not marked as fixed).
-3. Fix each issue, starting with `[CRITICAL]` and `[MAJOR]` items first.
-4. After fixing an issue, mark it as resolved in `CODE_REVIEW.md` (e.g., add `✅ Fixed` or a strikethrough).
-5. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why.
+1. Read `CODE_REVIEW.md` from the project root. Every issue listed is an unresolved issue (fixed issues have already been removed from the file).
+2. Fix each issue, starting with `[CRITICAL]` and `[MAJOR]` items first.
+3. After fixing an issue, **remove it from `CODE_REVIEW.md` entirely** — do not mark it as "fixed", do not strikethrough it, delete it. The file should only contain unfixed issues.
+4. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why it remains.
+
+**Rationale:** Removing fixed issues keeps `CODE_REVIEW.md` as a clean, actionable "remaining issues" list. Git history preserves a record of what was fixed and when.
 
 ---
 ## Severity Levels
