@@ -1,4 +1,18 @@
-﻿---
+## Fixing Review Issues
+
+When the user asks to fix issues discovered during a review:
+
+1. Read `CODE_REVIEW.md` from the project root. Every issue listed is an unresolved issue (fixed issues have already been removed from the file).
+2. Fix each issue, starting with `[CRITICAL]` and `[MAJOR]` items first.
+3. After fixing an issue, **delete it from `CODE_REVIEW.md` immediately** so it is gone from the file. The action is deletion — not annotation. Every trace of the issue must be erased from the file. The file must only contain issues that still need fixing.
+4. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why it remains.
+
+**NEVER:**
+- **NEVER mark an issue as "fixed", "resolved", "done", or any variant** — delete it.
+- **NEVER strikethrough, comment out, or move an issue to a "Fixed" section** — delete it.
+- **NEVER leave a fixed issue in the file for reference or audit** — git history already records what was fixed and when.
+- **NEVER add emoji, annotations, or timestamps next to a fixed issue instead of deleting it** — the only correct action is removal.
+---
 name: code-review
 model: reasoning
 category: testing
@@ -167,30 +181,24 @@ At the end of every review, output discovered issues to `CODE_REVIEW.md` in the 
   - Clear description of the problem
   - Suggested fix
 - Use a consistent format for each issue entry so it can be parsed later for fixing.
-
-### Format
-
-```markdown
-## Code Review Findings — YYYY-MM-DD
-
-### [SEVERITY] Short Title
-- **File:** `path/to/file.ext:NN`
-- **Problem:** Description of the issue.
-- **Fix:** Suggested resolution.
-```
-
----
-
 ## Fixing Review Issues
 
 When the user asks to fix issues discovered during a review:
 
 1. Read `CODE_REVIEW.md` from the project root. Every issue listed is an unresolved issue (fixed issues have already been removed from the file).
 2. Fix each issue, starting with `[CRITICAL]` and `[MAJOR]` items first.
-3. After fixing an issue, **remove it from `CODE_REVIEW.md` entirely** — do not mark it as "fixed", do not strikethrough it, delete it. The file should only contain unfixed issues.
+3. After fixing an issue, **delete it from `CODE_REVIEW.md` immediately** so it is gone from the file. The action is deletion — not annotation. Every trace of the issue must be erased from the file. The file must only contain issues that still need fixing.
 4. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why it remains.
 
-**Rationale:** Removing fixed issues keeps `CODE_REVIEW.md` as a clean, actionable "remaining issues" list. Git history preserves a record of what was fixed and when.
+**NEVER:**
+- **NEVER mark an issue as "fixed", "resolved", "done", or any variant** — delete it.
+- **NEVER strikethrough, comment out, or move an issue to a "Fixed" section** — delete it.
+- **NEVER leave a fixed issue in the file for reference or audit** — git history already records what was fixed and when.
+- **NEVER add emoji, annotations, or timestamps next to a fixed issue instead of deleting it** — the only correct action is removal.
+```
+
+---
+
 
 ---
 ## Severity Levels
