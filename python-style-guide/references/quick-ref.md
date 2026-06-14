@@ -1,5 +1,7 @@
 # 速查表
 
+---
+
 ## typing 模块常用符号
 
 | 符号 | 用途 | 示例 |
@@ -52,13 +54,12 @@
 | `TypeAlias` | ❌ | ❌ | ✅ | ✅ |
 | `Never` | ❌ | ❌ | ❌ | ✅ |
 | `dataclass(slots=True)` | ❌ | ❌ | ❌ | ✅ |
+| `match` 语句 | ❌ | ❌ | ❌ | ✅ |
 | `from __future__ import annotations` | ✅ | ✅ | ✅ | ✅ |
 
 ---
 
-## 常见代码模式速查
-
-### 函数注解
+## 函数注解
 
 ```python
 # 普通函数
@@ -75,9 +76,14 @@ async def fetch(url: str) -> bytes: ...
 
 # 生成器
 def gen(n: int) -> Generator[int, None, None]: ...
+
+# 无返回值
+def log(msg: str) -> None: ...
 ```
 
-### 类注解
+---
+
+## 类注解
 
 ```python
 class MyClass:
@@ -99,22 +105,6 @@ class MyClass:
     def doubled(self) -> int: ...
 ```
 
-### 泛型约束
-
-```python
-from collections.abc import Sequence
-
-# 约束上界
-T = TypeVar("T", bound=Sequence)
-
-# 约束具体类型
-N = TypeVar("N", int, float)
-
-# 多类型参数
-K = TypeVar("K")
-V = TypeVar("V")
-```
-
 ---
 
 ## 常见错误对照
@@ -127,23 +117,29 @@ V = TypeVar("V")
 | `def f(x: Any) -> Any` | 用 Union/Protocol/TypeGuard | 避免 Any |
 | `x: list = []` | `x: list[int] = []` | 变量也要标注 |
 | `@overload` 无非重载实现 | 最后一个 def 是实现 | overload 只是签名 |
+| `if x == None:` | `if x is None:` | 使用 is 比较 |
+| `if len(x) == 0:` | `if not x:` | 使用 truthiness |
 
 ---
 
-## 工具链建议
+## 工具链速查
 
 | 工具 | 用途 | 常用命令 |
 |------|------|----------|
+| **ruff** | Linter + 格式化 | `ruff check . --fix` |
+| **black** | 代码格式化 | `black .` |
+| **isort** | 导入排序 | `isort .` |
 | **mypy** | 静态类型检查 | `mypy src/` |
-| **pyright** | 微软出品，更严格 | `npx pyright` |
-| **pyre** | Facebook 出品 | `pyre check` |
-| **pydantic** | 运行时验证 | — |
-| **beartype** | 运行时类型检查 | `@beartype` |
+| **pyright** | 微软类型检查 | `pyright src/` |
+| **pytest** | 测试 | `pytest -v` |
+| **pytest-cov** | 测试覆盖率 | `pytest --cov=src` |
+| **bandit** | 安全检查 | `bandit -r src/` |
+| **pip-audit** | 依赖漏洞 | `pip-audit` |
 
-### IDE 配置建议
+### IDE 配置示例
 
 ```json
-// pyrightconfig.json（项目根目录）
+// pyrightconfig.json
 {
   "include": ["src"],
   "pythonVersion": "3.11",
@@ -154,4 +150,117 @@ V = TypeVar("V")
 
 ---
 
-> 🔗 返回：[Level 1](level-1-basic.md) | [Level 2](level-2-containers.md) | [Level 3](level-3-structured.md) | [Level 4](level-4-generics.md) | [Level 5](level-5-runtime.md) | [执行准则](rules.md)
+## PEP 8 速查
+
+| 场景 | 规则 |
+|------|------|
+| 缩进 | 4 空格 |
+| 行长度 | 88（Black）/79（严格） |
+| 导入顺序 | stdlib → 第三方 → 本地 |
+| 函数命名 | `snake_case` |
+| 类命名 | `PascalCase` |
+| 常量命名 | `UPPER_CASE` |
+| 私有属性 | `_single_underscore` |
+| 运算符空格 | `a + b`, `x = 1` |
+| 括号内 | `func(a, b)`, `d = {"a": 1}` |
+| 类间距 | 两空行分隔顶级定义 |
+| 方法间距 | 一空行分隔类方法 |
+
+---
+
+## Pythonic 模式速查
+
+```python
+# 推导式
+squares = [x**2 for x in range(10)]
+lookup = {item.id: item for item in items}
+
+# 上下文管理器
+with open("f") as f:
+    data = f.read()
+
+# 解包
+a, *rest, b = items
+a, b = b, a  # 交换
+
+# EAFP
+try:
+    value = d[key]
+except KeyError:
+    value = default
+
+# f-string
+msg = f"Hello {name}"
+
+# pathlib
+from pathlib import Path
+Path.home() / ".config" / "app"
+
+# enumerate
+for i, item in enumerate(items):
+    ...
+
+# join
+result = "".join(str(x) for x in items)
+```
+
+---
+
+## 反模式速查
+
+```python
+# ❌ 可变默认参数
+def bad(x=[]): ...
+
+# ✅
+def good(x=None):
+    x = x or []
+
+# ❌ 裸 except
+except: ...
+
+# ✅
+except ValueError as e: ...
+
+# ❌ == None
+if x == None: ...
+
+# ✅
+if x is None: ...
+
+# ❌ len() 判断空
+if len(x) == 0: ...
+
+# ✅
+if not x: ...
+
+# ❌ 循环内拼接
+result = ""
+for x in items:
+    result += str(x)
+
+# ✅
+result = "".join(str(x) for x in items)
+
+# ❌ import *
+from os import *
+
+# ✅
+import os
+```
+
+---
+
+## 数据类对比
+
+| 特性 | TypedDict | NamedTuple | dataclass |
+|------|-----------|------------|-----------|
+| JSON 支持 | ✅ | ❌ | ⚠️ |
+| 属性访问 | ❌ | ✅ | ✅ |
+| 可变 | ✅ | ❌ | ✅ |
+| 方法 | ❌ | ❌ | ✅ |
+| 适用场景 | API 响应 | 坐标/元组 | 业务对象 |
+
+---
+
+> 🔗 返回：[SKILL.md](../SKILL.md) | [type-annotations.md](type-annotations.md)

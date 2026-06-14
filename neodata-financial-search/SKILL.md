@@ -86,7 +86,7 @@ python3 scripts/query.py --query "用户的查询"
 > ⚠️ 必须在 **WorkBuddy**（而非 Codex）中执行以下步骤，因为 connect_cloud_service 是 WorkBuddy 专属的原生工具，Codex 不具备该能力。
 
 1. 调用 connect_cloud_service 工具（无参数）
-2. 从返回结果中提取凭证：**优先使用 	empToken 字段**；如果 	empToken 不存在或为空，则使用 	oken 字段（即 Keycloak JWT，有效期约一年）
+2. 从返回结果中提取凭证：**优先使用 tempToken 字段**；如果 tempToken 不存在或为空，则使用 token 字段（即 Keycloak JWT，有效期约一年）
 3. 执行 python3 scripts/query.py --save-token "<凭证>" 保存到缓存文件
 4. 切换回 Codex，重新执行查询：python3 scripts/query.py --query "用户的查询"
 

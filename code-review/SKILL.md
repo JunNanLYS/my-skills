@@ -1,7 +1,7 @@
 ﻿---
 name: code-review
 description: Systematic code review patterns covering security, performance, maintainability, correctness, and testing — with severity levels, structured feedback guidance, review process, and anti-patterns to avoid. Use when reviewing PRs, establishing review standards, or improving review quality.
-version: 1.1
+version: 1.2
 ---
 ## Trigger
 
@@ -151,39 +151,78 @@ Work through the code in three passes. Do not try to catch everything in one rea
 
 ---
 
-## Review Output: `CODE_REVIEW.md`
+## Review Output: `ISSUES.md`
 
-At the end of every review, output discovered issues to `CODE_REVIEW.md` in the project root directory (the root of the git repository or workspace).
+At the end of every review, output discovered issues to the `## 🔍 Code Review Issues` 
+section of `ISSUES.md` in the project root.
+
+> `ISSUES.md` is a multi-purpose file that also contains feature ideas and general todos. 
+> The code review skill only manages content within its designated section.
+
+### Expected File Structure
+
+```markdown
+# ISSUES.md
+
+## 🔍 Code Review Issues
+
+<!-- code review skill appends issues here -->
+
+---
+
+## 💡 Feature Ideas / 功能想法
+
+<!-- User's feature ideas and todos -->
+
+- [ ] 想法 1...
+- [ ] 想法 2...
+```
 
 ### Rules
 
-- **Ignore existing issues** — Before writing, read the existing `CODE_REVIEW.md`. Issues already present in the file must not be duplicated.
-- **Add new issues only** — Append only issues that are not already listed. Each issue entry includes:
+- **Preserve other content** — Read the existing `ISSUES.md`. Only append to the
+  `## 🔍 Code Review Issues` section. Do not modify or delete content in other sections.
+- **Ignore duplicates** — Before writing, scan the Code Review Issues section for existing
+  entries. Do not duplicate issues already listed.
+- **Append only** — Add new issues at the end of the Code Review Issues section, after
+  any existing entries but before the `---` separator if present.
+- **Consistent format** — Each issue entry includes:
   - Severity level (`[CRITICAL]`, `[MAJOR]`, `[MINOR]`, `[NIT]`)
   - File path and line range
   - Clear description of the problem
   - Suggested fix
-- Use a consistent format for each issue entry so it can be parsed later for fixing.
+
+### Example Entry Format
+
+```markdown
+### [CRITICAL] SQL injection vulnerability in user lookup
+
+- **File:** `src/auth.py:42`
+- **Description:** User input directly concatenated into SQL query
+- **Fix:** Use parameterized query: `cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))`
+```
+
+---
+
 ## Fixing Review Issues
 
 When the user asks to fix issues discovered during a review:
 
-1. Read `CODE_REVIEW.md` from the project root. Every issue listed is an unresolved issue (fixed issues have already been removed from the file).
+1. Read `ISSUES.md` from the project root. Focus only on the `## 🔍 Code Review Issues` section. Every issue listed there is an unresolved review issue (fixed issues have already been removed).
 2. Fix each issue, starting with `[CRITICAL]` and `[MAJOR]` items first.
-3. After fixing an issue, **delete it from `CODE_REVIEW.md` immediately** so it is gone from the file. The action is deletion — not annotation. Every trace of the issue must be erased from the file. The file must only contain issues that still need fixing.
-4. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why it remains.
+3. After fixing an issue, **delete it from the Code Review Issues section immediately**. The action is deletion — not annotation. Every trace of the issue must be erased from that section. Other sections of `ISSUES.md` (Feature Ideas, etc.) must not be modified.
+4. If an issue cannot be fixed (e.g., requires design decision), add a note explaining why it remains within the Code Review Issues section.
+5. When the Code Review Issues section becomes empty, remove the entire section (including the `---` separator) so the file only contains other content.
 
 **NEVER:**
 - **NEVER mark an issue as "fixed", "resolved", "done", or any variant** — delete it.
 - **NEVER strikethrough, comment out, or move an issue to a "Fixed" section** — delete it.
 - **NEVER leave a fixed issue in the file for reference or audit** — git history already records what was fixed and when.
 - **NEVER add emoji, annotations, or timestamps next to a fixed issue instead of deleting it** — the only correct action is removal.
-```
+- **NEVER modify or delete content outside the Code Review Issues section** — user ideas and todos are sacred.
 
 ---
 
-
----
 ## Severity Levels
 
 Classify every comment by severity so the author knows what blocks merge.
