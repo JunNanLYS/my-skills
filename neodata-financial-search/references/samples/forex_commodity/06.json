@@ -1,0 +1,37 @@
+C:\Users\18906\AppData\Local\Programs\Python\Python311\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.4.0) or chardet (7.4.3)/charset_normalizer (3.4.2) doesn't match a supported version!
+  warnings.warn(
+{
+  "msg": "操作成功",
+  "suc": true,
+  "traceId": "5fdd34e13d366b4d001bbb23f1ebd582",
+  "code": "200",
+  "data": {
+    "seParams": {},
+    "requestId": "fa14ff4232e44d9bb5f2d3ddf276a69d",
+    "apiData": {
+      "apiRecall": [
+        {
+          "tag": "期货数据",
+          "type": "基本金属期货行情查询",
+          "content": "| 市场类型 | 期货名称 | 证券代码 | 最新价格 | 昨收盘 | 今开盘 | 总成交 | 买1价 | 买1量 | 卖1价 | 卖1量 | 当前成交量 | 生成时间 | 价格涨跌 | 涨跌幅度 | 最高价格 | 最低价格 | 货币单位 | 成交数量 | 持仓量 | 日增仓 | 昨日结算价 | 均价 | 英文名称 | 52周最高 | 52周最低 |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n| delay | COMEX铜 | HG | 6.494 | 6.496 | 6.486 | 10845 | 6.494 | 3 | 6.495 | 1 | -- | 2026-06-16 07:34:59 | -0.002 | -0.03 | 6.507 | 6.425 | USD | 10845 | 80670 | -7899 | 6.496 | 6.466 | COMEX Copper Futures | 6.716 | 4.333 |",
+          "desc": "基本金属期货行情查询"
+        }
+      ],
+      "entity": [
+        {
+          "code": "期货概念",
+          "name": "02B20002.PT"
+        },
+        {
+          "code": "铜概念",
+          "name": "02050001.PT"
+        },
+        {
+          "code": "最新价格",
+          "name": "1.HQ"
+        }
+      ]
+    },
+    "extraParams": {}
+  }
+}

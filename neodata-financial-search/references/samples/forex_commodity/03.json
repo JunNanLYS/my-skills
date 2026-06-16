@@ -1,0 +1,30 @@
+C:\Users\18906\AppData\Local\Programs\Python\Python311\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.4.0) or chardet (7.4.3)/charset_normalizer (3.4.2) doesn't match a supported version!
+  warnings.warn(
+{
+  "msg": "操作成功",
+  "suc": true,
+  "traceId": "751630c6aef11814f949a574d74d3699",
+  "code": "200",
+  "data": {
+    "seParams": {},
+    "requestId": "ed1a21d6d07347b3b7ef97f28a0ec7d4",
+    "apiData": {
+      "apiRecall": [
+        {
+          "tag": "期货数据库",
+          "type": "黄金期货综合行情查询",
+          "content": "| 商品类型 | 市场类型 | 期货名称 | 证券代码 | 最新价格 | 昨收盘 | 今开盘 | 总成交 | 买1价 | 买1量 | 卖1价 | 卖1量 | 当前成交量 | 生成时间 | 价格涨跌 | 涨跌幅度 | 最高价格 | 最低价格 | 货币单位 | 成交数量 | 持仓量 | 日增仓 | 昨日结算价 | 均价 | 英文名称 | 52周最高 | 52周最低 |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n| 现货 | -- | 黄金现货-上海金 | AU9999.SHG | 940.48 | -- | 0.00 | -- | -- | -- | -- | -- | -- | 2026-06-16 19:43:00 | -- | 0.00 | -- | -- | -- | -- | -- | -- | 940.48 | -- | -- | -- | -- |\n| 现货 | -- | 黄金现货-伦敦金 | AUUSDO.LIFFE | 4360.50 | -- | 4331.30 | -- | -- | -- | -- | -- | -- | 2026-06-16 19:34:00 | -- | 0.20 | -- | -- | -- | -- | -- | -- | 4351.60 | -- | -- | -- | -- |",
+          "desc": "黄金期货综合行情查询"
+        },
+        {
+          "tag": "黄金数据库",
+          "type": "黄金历史数据查询接口",
+          "content": "| 黄金名称（伦敦金/上海金等） | 数据日期 | 黄金价格 | 日涨跌幅 | 时间周期类型及区间涨跌幅 | 黄金类型 | 单位 | 来源 | 国家 | 数据更新频率 | 币种 |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n| 上海黄金交易所:收盘价:黄金:Au9999 | 20260616 | 940.48 | 0.3168 | period_type:近1周, period_change_rate:-0.4762, period_change_value:-4.5, annualized_period_change_rate:0.0 | 黄金现货 | 元/克 | 上海黄金交易所 | 中国 | 日 | 人民币 |\n| 上海黄金交易所:收盘价:黄金:Au9999 | 20260615 | 937.51 | 3.3103 | period_type:近1周, period_change_rate:-0.3719, period_change_value:-3.5, annualized_period_change_rate:0.0 | 黄金现货 | 元/克 | 上海黄金交易所 | 中国 | 日 | 人民币 |\n| 伦敦现货黄金:下午:美元 | 20260615 | 4355.2 | 4.0433 | period_type:近1周, period_change_rate:0.8008, period_change_value:34.6, annualized_period_change_rate:0.0 | 黄金现货 | 美元/金衡盎司 | 伦敦金银市场协会 | 英国 | 日 | 美元 |\n| 收盘价:XAUUSD | 20260615 | 4309.56 | 2.1472 | period_type:近1周, period_change_rate:-0.4656, period_change_value:-20.158, annualized_period_change_rate:0.0 | 黄金现货 | 美元/盎司 | 同花顺金融 | -- | 日 | 美元 |\n| 现货收盘价:伦敦金(人民币) | 20260615 | 939.2371 | 2.3823 | period_type:近1周, period_change_rate:-0.54, period_change_value:-5.0998, annualized_period_change_rate:0.0 | 黄金现货 | 元/克 | 同花顺金融 | -- | 日 | 人民币 |\n| 现货收盘价:伦敦金(美元) | 20260615 | 4309.56 | 2.1472 | period_type:近1周, period_change_rate:-0.4656, period_change_value:-20.158, annualized_period_change_rate:0.0 | 黄金现货 | 美元/盎司 | 同花顺金融 | -- | 日 | 美元 |\n| 伦敦现货黄金:下午:美元 | 20260612 | 4185.95 | 2.7265 | period_type:近1周, period_change_rate:-4.1052, period_change_value:-179.2, annualized_period_change_rate:0.0 | 黄金现货 | 美元/金衡盎司 | 伦敦金银市场协会 | 英国 | 日 | 美元 |\n| 收盘价:XAUUSD | 20260612 | 4218.97 | 0.1602 | period_type:近1周, period_change_rate:-2.5399, period_change_value:-109.95, annualized_period_change_rate:0.0 | 黄金现货 | 美元/盎司 | 同花顺金融 | -- | 日 | 美元 |\n| 现货收盘价:伦敦金(人民币) | 20260612 | 917.3823 | -0.0325 | period_type:近1周, period_change_rate:-2.5156, period_change_value:-23.6736, annualized_period_change_rate:0.0 | 黄金现货 | 元/克 | 同花顺金融 | -- | 日 | 人民币 |\n| 现货收盘价:伦敦金(美元) | 20260612 | 4218.97 | 0.1602 | period_type:近1周, period_change_rate:-2.5399, period_change_value:-109.95, annualized_period_change_rate:0.0 | 黄金现货 | 美元/盎司 | 同花顺金融 | -- | 日 | 美元 |",
+          "desc": "黄金历史数据查询接口"
+        }
+      ],
+      "entity": []
+    },
+    "extraParams": {}
+  }
+}

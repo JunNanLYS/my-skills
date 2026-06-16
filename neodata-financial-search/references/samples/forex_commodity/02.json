@@ -1,0 +1,29 @@
+C:\Users\18906\AppData\Local\Programs\Python\Python311\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.4.0) or chardet (7.4.3)/charset_normalizer (3.4.2) doesn't match a supported version!
+  warnings.warn(
+{
+  "msg": "操作成功",
+  "suc": true,
+  "traceId": "196cb10584a8680ed2daafdbec6d2345",
+  "code": "200",
+  "data": {
+    "seParams": {},
+    "requestId": "95b46a9951874441adc67c1e9364400c",
+    "apiData": {
+      "apiRecall": [
+        {
+          "tag": "外汇数据库",
+          "type": "人民币及外汇汇率实时行情查询",
+          "content": "| 外汇名称 | 外汇ID | 最新价 | 点差 | 行情时间 | 昨收价 | 今开价 | 最高价 | 最低价 | 买1价 | 卖1价 | 涨跌额 | 涨跌幅（%） | 5日涨跌幅（%） | 10日涨跌幅（%） | 20日涨跌幅（%） | 60日涨跌幅（%） | 年初至今涨跌幅（%） | 52周最高价 | 52周最低价 |\n| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n| 美元日元 | USDJPY | 160.3400 | 0 | 20260616194453 | 160.2800 | 160.2800 | 160.3600 | 160.0400 | 160.3400 | 160.3500 | 0.0600 | 0.04 | -0.01 | 0.26 | 0.80 | 0.29 | 2.35 | 160.7200 | 142.6800 |",
+          "desc": "人民币及外汇汇率实时行情查询"
+        }
+      ],
+      "entity": [
+        {
+          "code": "美元日元",
+          "name": "USDJPY.FX"
+        }
+      ]
+    },
+    "extraParams": {}
+  }
+}

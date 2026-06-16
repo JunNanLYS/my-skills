@@ -1,0 +1,29 @@
+C:\Users\18906\AppData\Local\Programs\Python\Python311\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.4.0) or chardet (7.4.3)/charset_normalizer (3.4.2) doesn't match a supported version!
+  warnings.warn(
+{
+  "msg": "操作成功",
+  "suc": true,
+  "traceId": "47ac6ae2d2556d140cbfc90e01d806f5",
+  "code": "200",
+  "data": {
+    "seParams": {},
+    "requestId": "81060862affb4639b4d833744635364a",
+    "apiData": {
+      "apiRecall": [
+        {
+          "tag": "股票数据库",
+          "type": "今日资金流向",
+          "content": "当日资金流向\n02GN2236.PTA股(代码：02GN2236.PT)最新资金流向资金面情况具体如下：主力净流入419556226元，主力流入102834162056元，占比：31%。主力流出102414605829元，占比：31%。散户流入63154442977元，占比：19%，散户流出63573999203元，占比：19%。中单流入0元，小单流入0元。\n\n",
+          "desc": "今日资金流向"
+        }
+      ],
+      "entity": [
+        {
+          "code": "光芯片",
+          "name": "02GN2236.PT"
+        }
+      ]
+    },
+    "extraParams": {}
+  }
+}

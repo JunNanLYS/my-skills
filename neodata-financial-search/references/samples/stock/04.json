@@ -1,0 +1,29 @@
+C:\Users\18906\AppData\Local\Programs\Python\Python311\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.4.0) or chardet (7.4.3)/charset_normalizer (3.4.2) doesn't match a supported version!
+  warnings.warn(
+{
+  "msg": "操作成功",
+  "suc": true,
+  "traceId": "de0e89b79f0aa29b54cb13021782715b",
+  "code": "200",
+  "data": {
+    "seParams": {},
+    "requestId": "80083eabe5f24f85928bc6a5ab4842e1",
+    "apiData": {
+      "apiRecall": [
+        {
+          "tag": "股票数据库",
+          "type": "利润表",
+          "content": "根据宁德时代（代码:300750.SZ）在A股市场20260310发布的财报数据，统计截止日期为20251231的年报，其中利润表相关的财务指标如下（货币单位：人民币元）：\n营业总收入423701834000元，\n营业收入423701834000元，\n营业成本312383297000元，\n毛利111318537000元，\n基本每股收益16.14元，\n营业利润89518636000元，\n净利润76786309000元，\n归母净利润72201282000元，\n销售费用3735118000元，\n管理费用11666741000元，\n财务费用-7939863000元，\n研发费用22146581000元，\n信用减值损失-418585000元，\n资产减值损失-8660164000元，\n所得税费用12740236000元，\n投资净收益7970552000元，\n其他综合收益7220215000元，\n综合收益总额84006523000元，\n摊薄每股收益16.14元。",
+          "desc": "利润表"
+        }
+      ],
+      "entity": [
+        {
+          "code": "宁德时代",
+          "name": "300750.SZ"
+        }
+      ]
+    },
+    "extraParams": {}
+  }
+}
