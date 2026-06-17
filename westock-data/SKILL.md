@@ -37,7 +37,7 @@ westock-data quote sh600000                      # 单股
 westock-data quote sh600000,sz000001,hk00700     # 批量
 ```
 
-> `search` 和 `minute` 不支持批量查询。详细返回格式见 [references/ai_usage_guide.md](./references/ai_usage_guide.md)
+> `search` 和 `minute` 不支持批量查询。返回格式与字段含义见 [references/return-format.md](./references/return-format.md)
 
 ---
 
@@ -255,7 +255,7 @@ westock-data etf-holders sh510300          # ETF 持有人结构
 westock-data etf-financial sh510300        # ETF 财务指标
 ```
 
-> 以上命令均支持逗号分隔批量查询。详细字段说明见 [references/ai_usage_guide.md](./references/ai_usage_guide.md)
+> 以上命令均支持逗号分隔批量查询。详细字段说明见 [references/return-format.md](./references/return-format.md)
 
 ---
 
@@ -440,7 +440,16 @@ ST警示：risk sh600000 --types st → 查看ST风险警示股票
 
 **完整分析场景（33个）参见 [references/scenarios-guide.md](./references/scenarios-guide.md)**
 
-**详细返回格式、字段说明、分析模板参见 [references/ai_usage_guide.md](./references/ai_usage_guide.md)**
+---
+
+## 参考文档
+
+| 文档 | 用途 |
+|------|------|
+| [references/return-format.md](./references/return-format.md) | 每个命令的**实际输出格式**与字段含义（Markdown 表格列名、单位、批量前缀等） |
+| [references/westock-api-docs.md](./references/westock-api-docs.md) | 接口逆向文档：域名/端点/路由、fields 完整列表、响应结构、鉴权、限制（49 命令全量） |
+| [references/scenarios-guide.md](./references/scenarios-guide.md) | 33 个常见分析场景的标准查询路径 |
+| [references/ai_usage_guide.md](./references/ai_usage_guide.md) | AI 使用本技能的整体规范与最佳实践 |
 
 ---
 
