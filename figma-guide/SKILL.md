@@ -322,7 +322,190 @@ Page ID 不变(参见 §3.6)的情况下,**不要**主动刷新缓存。
 
 ---
 
-## 9 · 完工前自检清单
+## 9 · 复合组件 resize 助手(`scripts/figma-resize.mjs`)
+
+### 9.1 为什么需要
+
+`mcp__figma-bridge__set_node_properties` 只改父节点 `w/h`,**不动子节点**。子节点坐标是绝对的,父框缩小时右边/下边子节点被裁,放大时空出。Figma 的 `constraints` 需要预先在每个子节点上设置,事后靠 MCP 改不回。
+
+AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
+
+### 9.2 工具位置
+
+`<skill>/scripts/figma-resize.mjs`
+
+- 项目本地:`D:/ai-skills/figma-guide/scripts/figma-resize.mjs`
+- 全局 skill:`C:/Users/18906/.claude/skills/figma-guide/scripts/figma-resize.mjs`
+
+> 两份内容一致,**改一份后同步另一份**。
+
+### 9.3 三种重算模式
+
+| Mode | 语义 | 适用场景 |
+|---|---|---|
+| **`center`** | 子节点相对父中心保持,旧中心距离按比例映射到新父框 | 父框均匀缩小,子节点同向居中 |
+| **`scale`** | 子节点 `x/y/w/h` 全部按 `rx = newW/oldW, ry = newH/oldH` 等比缩放 | 父框缩放后子节点也要同比缩放(图标、卡片) |
+| **`anchor`** | 锚点位置不动,其余子节点按比例重新分布 | 父框只改一边(如 tab 容器加宽)、其余 pin |
+
+### 9.4 调用约定
+
+**Claude 不直接执行脚本,而是**:
+
+1. 用 `mcp__figma-bridge__get_node` 拿父 + 子节点当前 `x/y/w/h`
+2. 组装 `--config` JSON(见下)
+3. `node figma-resize.mjs <parentNodeId> --config <json>` → 拿到每个子节点的 `{x, y, w, h}` plan
+4. 用 `mcp__figma-bridge__set_node_properties` 批量下发新坐标
+5. (可选) 截图核对
+
+> 脚本**不**直接调 MCP — 留给 Claude 侧执行,本脚本只做纯计算 + dry-run 校验。
+
+### 9.5 config 格式
+
+```jsonc
+{
+  "parent":   { "x":0, "y":0, "w":360, "h":40 },   // resize 前的父框(从 get_node 拿)
+  "newW": 300, "newH": 40,                        // resize 后的目标尺寸
+  "mode": "center",                               // center | scale | anchor
+  "anchor": "tl",                                 // anchor 模式生效:tl/t/tr/l/c/r/bl/b/br
+  "children": [
+    { "id":"47:239", "x":14, "y":8, "w":32, "h":24, "constraints":"tl" }
+    //   ↑ constraints 写法遵循 Figma:tl/pin 左上; scale/等比缩放; 不写默认 tl
+  ]
+}
+```
+
+输出 plan 字段:
+
+```json
+{
+  "nodeId": "47:212",
+  "ratio": { "rx": 0.833, "ry": 1.25 },
+  "plan": [
+    {
+      "id": "47:239",
+      "from": { "x":14, "y":8,  "w":32, "h":24 },
+      "to":   { "x":12, "y":10, "w":27, "h":30 },
+      "delta":{ "dx":-2, "dy":2, "dw":-5, "dh":6 },
+      "warnings": []
+    }
+  ]
+}
+```
+
+### 9.6 行为保证
+
+- 所有计算 `Math.round`,统一像素精度
+- `clamp` 防止子节点超出新父框,贴边处理
+- 超出时 `warnings` 列出具体超出哪边,**exit code 2**(区别于正常 0)
+- 不读状态文件、不写文件 — 纯函数,无副作用
+
+### 9.7 反例
+
+```diff
+- ❌ 对每个子节点凭印象算新坐标(差 1-2px 累积成肉眼可见的错位)
+- ❌ 改父框后批量 set_node_properties 不算子节点(裁切/溢出)
+- ❌ 用 delete + recreate "修"几何(丢样式和引用,见 §3.3)
+```
+
+---
+
+## 10 · 子组件越界检测器(`scripts/figma-validate-bounds.mjs`)
+
+### 10.1 为什么需要
+
+复合组件(尤其 auto-layout 失效后的 fallback 布局)中,经常出现:
+- 子节点被父框裁掉一部分(右/下溢出)
+- 子节点"出框"飘在父框外(左/上溢出)
+- 改一个父框 w/h 后,内部绝对定位的子节点没跟着动
+
+肉眼难一眼看出来,尤其深嵌套几层后。本脚本递归遍历整棵子树,直接报出每个违规的 `parentId / childId / side / overflow 像素`。
+
+### 10.2 工具位置
+
+`<skill>/scripts/figma-validate-bounds.mjs`
+
+- 项目本地:`D:/ai-skills/figma-guide/scripts/figma-validate-bounds.mjs`
+- 全局 skill:`C:/Users/18906/.claude/skills/figma-guide/scripts/figma-validate-bounds.mjs`
+
+### 10.3 检测规则
+
+对每个 parent-child 对:
+- `child.x < 0` → left 溢出 `|child.x|` px
+- `child.y < 0` → top 溢出 `|child.y|` px
+- `child.x + child.w > parent.w` → right 溢出 `child.x + child.w - parent.w` px
+- `child.y + child.h > parent.h` → bottom 溢出 `child.y + child.h - parent.h` px
+
+**坐标系约定**:Figma REST API 默认返回 `x/y` 是**相对父的局部坐标**,所以比较时父参考原点视为 (0, 0),**不**累加祖父层偏移。
+
+### 10.4 默认行为
+
+- `clipsContent=true` 的父节点 → 子节点溢出**忽略**(设计意图就是裁,例如头像框)
+- 容差 0(整数像素,不该有浮点误差)
+
+`--strict` 把 `clipsContent=true` 也算违规。`--tolerance N` 把容差放宽 N px(对付历史脏数据)。
+
+### 10.5 调用约定
+
+**Claude 不直接执行脚本,而是**:
+
+1. 用 `mcp__figma-bridge__get_node` 递归拿根节点的子树(可多次调用 + 拼装 JSON)
+2. 把节点的真实 `x/y/w/h/clipsContent/children` 装进 `--config`
+3. `node figma-validate-bounds.mjs <rootNodeId> --config <json>` 拿 violations 列表
+4. 据此决定:用 §9 `figma-resize` 重算子节点坐标 / 扩父框 / 改 clipsContent
+
+### 10.6 config 格式
+
+```jsonc
+{
+  "root": {
+    "id": "47:212",
+    "x": 0, "y": 0, "w": 360, "h": 40,         // 根节点 bounds
+    "clipsContent": false,                      // 可选
+    "children": [                               // 递归子树
+      {
+        "id": "47:239", "x": 14, "y": 8, "w": 32, "h": 24,
+        "clipsContent": false,
+        "children": []
+      }
+    ]
+  }
+}
+```
+
+### 10.7 输出
+
+```json
+{
+  "rootId": "47:212",
+  "summary": { "nodesVisited": 11, "violations": 3, "parentsWithIssues": 2 },
+  "violations": [
+    {
+      "parentId": "47:212", "parentName": "PageHeader",
+      "childId": "47:300",  "childName": "TabBar",
+      "childType": "FRAME",
+      "issues": [{ "side": "bottom", "overflow": 101, "childBox": {...}, "parentBox": {...} }]
+    }
+  ],
+  "tree": { /* 整棵递归树,violations 字段填在每个 parent 节点上 */ }
+}
+```
+
+退出码:
+- **0**:全部通过
+- **1**:有违规(便于 CI 串联)
+- **2**:参数错误
+
+### 10.8 反例
+
+```diff
+- ❌ 只看 root 节点的 bounds(看不到深嵌套子节点溢出)
+- ❌ 凭"截图看着像没事"主观判断(子节点溢出 1-2px 肉眼难辨)
+- ❌ 递归写循环忘了 clipsContent(把"故意裁切"误报成违规)
+```
+
+---
+
+## 11 · 完工前自检清单
 
 - [ ] 全程使用 Bridge 工具,未混用 Figma MCP(读取除外)
 - [ ] 每个 `create_*` 之后立刻 `reparent_nodes` + 本地坐标
@@ -335,3 +518,5 @@ Page ID 不变(参见 §3.6)的情况下,**不要**主动刷新缓存。
 - [ ] 截图保存到 `<项目根>/temp/figma/`,scale=2,格式 PNG
 - [ ] 截图 Read 目视确认无重叠 / 裁切 / 色差 / 遮挡
 - [ ] 未擅自修改或删除项目已交付的内容
+- [ ] **改动任何复合组件父框 `w/h` 后,运行 §10 `figma-validate-bounds.mjs` 验证子树无越界(exit=0 才算通过)**
+- [ ] **越界违规存在时,运行 §9 `figma-resize.mjs` 重算子节点坐标,再下发 `set_node_properties` — 不要凭印象算**
