@@ -1,7 +1,7 @@
 ---
 name: figma-guide
 description: Figma 编写规范 — 坐标与放置规则、reparent 纪律、token 强制、export 流程。仅当消息中出现 "Figma" 一词时触发(中英文不限)。不要被泛用动词(改/加/修/add/modify/fix)、NodeId 或工具名误触发 —— 那些可能是无关任务。
-version: 1.1
+version: 1.2
 ---
 
 ## 触发条件
@@ -469,11 +469,11 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
 **Claude 不直接执行脚本,而是**:
 
 1. 用 `figma_get_nodes` 递归拿根节点的子树(可多次调用 + 拼装 JSON),`depth="full"` 拿到所有子节点
-2. 把节点的真实 `x/y/w/h/clipsContent/children` 装进 `--config`
-3. `node figma-validate-bounds.mjs <rootNodeId> --config <json>` 拿 violations 列表
+2. 把节点的 `x/y/w/h/clipsContent` + `children: [id, id, ...]` 装进 `--config`(递归树)或 `--figma-json`(id 平铺字典,见 §10.5b)
+3. `node figma-validate-bounds.mjs <rootNodeId> --config <json>` 或 `--figma-json <json>` 拿 violations 列表
 4. 据此决定:用 §9 `figma-resize` 重算子节点坐标 / 扩父框 / 改 clipsContent
 
-### 10.6 config 格式
+### 10.5a config 格式(递归树,旧版)
 
 ```jsonc
 {
@@ -481,7 +481,7 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
     "id": "47:212",
     "x": 0, "y": 0, "w": 360, "h": 40,         // 根节点 bounds
     "clipsContent": false,                      // 可选
-    "children": [                               // 递归子树
+    "children": [                               // 递归子树,内嵌完整节点
       {
         "id": "47:239", "x": 14, "y": 8, "w": 32, "h": 24,
         "clipsContent": false,
@@ -492,7 +492,40 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
 }
 ```
 
-### 10.7 输出
+**缺点**:Claude 要手工把 Figma 树转成嵌套结构,3 层以上容易丢层或拼错。
+
+### 10.5b figma-json 格式(id 平铺字典,推荐)
+
+```jsonc
+{
+  "rootId": "47:212",
+  "nodes": {
+    "47:212": { "id": "47:212", "x": 0, "y": 0, "w": 360, "h": 40, "clipsContent": false, "children": ["47:239", "47:300"] },
+    "47:239": { "id": "47:239", "x": 14, "y": 8, "w": 32, "h": 24, "clipsContent": false, "children": [] },
+    "47:300": { "id": "47:300", "x": 100, "y": 50, "w": 200, "h": 30, "clipsContent": false, "children": [] }
+    //  ↑ children 只放 id 数组,不是嵌套对象
+  }
+}
+```
+
+**优点**:
+- 平铺 id 索引,直接对应 `figma_get_nodes` 返回格式,Claude 把多个节点结果塞进 `nodes: {...}` 字典即可,无需手工拼嵌套树
+- 缺节点警告但不报错(单个坏引用不会让整棵树挂掉)
+- `rootId` 缺失时用 CLI 第一参数 `<rootNodeId>`,二者不一致只警告
+
+**拼装流程**:
+
+```
+第 1 步:figma_get_nodes(nodeIds=[<rootId>], depth="full")   可能拿不全
+第 2 步:补 figma_get_nodes(missingChildIds)               直到拿全
+第 3 步:把每个节点 {id, x, y, w, h, clipsContent, children} 直接塞 nodes[id]
+        children 数组里只放子节点 id,不放对象
+第 4 步:写文件 / 传 inline 给 --figma-json
+```
+
+> `clipsContent` 字段 `figma_get_nodes` 默认不返回,需要 `depth="full"` 或单独查;省略则默认 `false`。
+
+### 10.6 输出
 
 ```json
 {
@@ -515,12 +548,13 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
 - **1**:有违规(便于 CI 串联)
 - **2**:参数错误
 
-### 10.8 反例
+### 10.7 反例
 
 ```diff
 - ❌ 只看 root 节点的 bounds(看不到深嵌套子节点溢出)
 - ❌ 凭"截图看着像没事"主观判断(子节点溢出 1-2px 肉眼难辨)
 - ❌ 递归写循环忘了 clipsContent(把"故意裁切"误报成违规)
+- ❌ 拼 --config 时手工嵌套 children 写错层级或漏节点(改用 --figma-json 平铺,避免人为拼树)
 ```
 
 ---
