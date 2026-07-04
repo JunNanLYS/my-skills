@@ -1,14 +1,26 @@
 ---
 name: figma-guide
-description: Figma 编写规范 — 坐标与放置规则、reparent 纪律、token 强制、export 流程。仅当消息中出现 "Figma" 一词时触发(中英文不限)。不要被泛用动词(改/加/修/add/modify/fix)、NodeId 或工具名误触发 —— 那些可能是无关任务。
-version: 1.2
+description: Figma 工程的统一入口 — 涵盖 MCP bridge(默认)、CLI(可独立安装的 @nono/figma-cli)、fork(.tools/figma-bridge-fork/)三种调用方式,以及坐标放置、token 强制、复合组件 6 大陷阱、export 验证、bounds 检测。触发条件:消息包含 Figma / figma / figma-cli / figma-bridge / NodeId 任一词时加载。不要被泛用动词(改/加/修/add/modify/fix)误触发。
+version: 1.4
 ---
 
 ## 触发条件
 
-仅当用户消息**包含 "Figma" 一词**(英文或中文)时执行本 Skill。
+仅当用户消息**包含 Figma / figma / figma-cli / figma-bridge / NodeId 任一词**(中英文不限)时执行本 Skill。
 
-如果消息里没有 "Figma",即使涉及 UI / 颜色 / 组件,也**跳过**本 Skill —— 那可能是代码任务(Vue / React / Tailwind 等)。
+如果消息里没有这些词,即使涉及 UI / 颜色 / 组件,也**跳过**本 Skill —— 那可能是代码任务(Vue / React / Tailwind 等)。
+
+## 调用方式总览
+
+figma-guide 同时支持三种调用方式。前两种互相配合,第三种是 fork。**默认走 MCP bridge**。
+
+| 方式 | 何时用 | 安装方式 | 详细章节 |
+|---|---|---|---|
+| **MCP bridge**(`mcp__figma-mcp-bridge__*`) | Claude 实时对话、交互式编辑 | Claude Code 配置里 `claude mcp add` 启动 server | §1 / §2 / §3 / §11 |
+| **CLI**(`figma call <tool> --json '{...}'`) | 自动化、CI、可重放的批量任务 | **`npm install -g @nono/figma-cli`** — 见 §12.0 bootstrap | **§12**(install-first) |
+| **fork**(`D:/Project/Nono/.tools/figma-bridge-fork/`) | 项目本地 fork 的 bridge,带 FigJam + Prototype 工具 | 同 MCP(只是 server 换),项目里 | **§13**(轻量速查,详细 runtime 约束见 fork/CLAUDE.md) |
+
+> **三种方式互不冲突**(走同一个端口,默认 3055)。如果不确定装没装 CLI,先 `which figma` 或 `npx figma --list` 验证。
 
 ---
 
@@ -157,6 +169,25 @@ B. 简化模式(Component 缺失时):
 - 不要一次性批量创建 50+ 节点再验证 —— 中间错位难以回溯。
 - `figma_search_nodes` 用 parentId 限定范围,避免全文档爆炸扫描。
 
+### 3.4 复合组件 6 大陷阱(踩坑沉淀)
+
+直接创建 / 改写 Component / Instance 时的 6 个高频坑,出自 Nono 设计实操:
+
+| # | 陷阱 | 现象 | 应对 |
+|---|---|---|---|
+| 1 | **`clipsContent` 默认截断** | 子节点超出父框默认被裁掉 | 创建 frame 后立刻 `figma_get_nodes` 确认;如需可见,显式设 `clipsContent=false` |
+| 2 | **ID 重映射** | 升 Component / 大改结构后所有子节点 ID 重新生成 | 重构后**重新** `figma_get_nodes` 拿新 ID,缓存的旧 ID 全部作废 |
+| 3 | **Instance 只读** | 改不了子节点属性,只能改 instance 暴露的 properties | 改样式走 `figma_swap_instance` 换组件 / `figma_detach_instance` 拆掉改 / 改 master 让 instance 同步 |
+| 4 | **升 Component 是快照** | 升完 Component 后再改 master,instance **不会**自动同步 | 升 Component 前**确认结构和样式都对**;升完后悔只能 detach 重做 |
+| 5 | **不扩容父框** | 内容多了 → 组件宽度/高度自动撑开,破坏栅格 | 改父框尺寸用 §9 `figma-resize.mjs` 重算子节点,不能让子节点硬撑父框 |
+| 6 | **文字 auto-resize 不一致** | 文字节点 `textAutoResize` 默认行为不一致(HEIGHT / WIDTH_AND_HEIGHT / NONE),容易撑破布局 | 长文本统一 `textAutoResize="HEIGHT"`(固定宽度,纵向自动);行数不可控时用 NONE + 手动截断 |
+
+**操作纪律**:
+
+- 升 Component 之前 → 先把所有子节点样式、autolayout、文字 autoresize 都调好,再升。升完就不再改了。
+- 改父框 w/h 之前 → 先用 §10 `figma-validate-bounds.mjs` 扫一遍当前越界情况,知道"修之前"基线。
+- 改完父框 w/h 之后 → **必须**再跑一次 §10,确认 exit=0 才算通过。
+
 ---
 
 ## 4 · 获取 Page 与文件结构
@@ -295,6 +326,38 @@ Page ID 不变(参见 §4.6)的情况下,**不要**主动刷新缓存。
 2. **视觉层** —— `figma_export_node` 导出 PNG(scale=2)。
 3. **业务层** —— Read 截图目视确认无重叠 / 裁切 / 色差。
 
+### 7.0 截图必 Read(强制)
+
+**`figma_export_node` 返回成功 ≠ 渲染正确**。工具返回 base64 不代表 UI 视觉上没问题 —— 实际渲染中常见的"看不见的错":
+
+- 文字被裁(autoresize 算错高度)
+- 颜色用错(变量未绑定,落到 fallback)
+- 节点被覆盖(z-order 错)
+- Instance overrides 没生效(master 改了但 instance 没刷)
+
+**强制规则**:
+
+```diff
++ ✅ 每次 figma_export_node 后,必须用 Read 工具打开截图 PNG
++ ✅ 重点核对:文字完整可见 / 颜色与设计稿一致 / 无遮挡 / 无 1px 错位
++ ✅ Read 完才能向用户报告"已完成"
++ ✅ Read 发现问题 → 回到代码层定位,不要硬调
+
+- ❌ 截图工具返回成功就宣布完成(等同于没做验证)
+- ❌ 只看 base64 大小判断"导出正常"(大小不能反映渲染正确性)
+- ❌ 在 Read 之前向用户承诺视觉效果
+```
+
+**Read 截图时的速查清单**:
+
+- [ ] 文字是否完整(无 ... 截断、被裁、超框)
+- [ ] 颜色是否匹配(尤其语义色:绿涨红跌 / 警示 / 禁用)
+- [ ] 元素是否有重叠或被遮挡
+- [ ] 间距是否均匀(尤其列表行 / 卡片组)
+- [ ] 圆角 / 描边 / 阴影是否符合项目 token
+- [ ] 父框与子节点是否对齐(左对齐 / 居中 / 右对齐)
+- [ ] 复合组件的实例 overrides 是否生效(master 改后 instance 是否同步)
+
 ### 7.1 截图路径原则
 
 推荐 `<项目根>/temp/figma/` —— **必须先 `mkdir -p`**,否则 `figma_export_node` 返回的 base64 需要自己写盘(本工具直接返 base64,不写文件)。
@@ -307,12 +370,90 @@ figma_export_node(nodeId=<id>, format="PNG", scale=2)
 → Claude 用 Read 工具或脚本解码到 <项目根>/temp/figma/{page-name}-{feature}.png
 ```
 
+**base64 写盘示例**(Python):
+
+```python
+import base64, pathlib
+pathlib.Path("<项目根>/temp/figma").mkdir(parents=True, exist_ok=True)
+out = pathlib.Path(f"<项目根>/temp/figma/{name}.png")
+out.write_bytes(base64.b64decode(<base64 string>))
+```
+
+> 写盘后**必须** `Read file_path=<png>` 打开,目视核对(见 §7.0)。
+> 已有可复用脚本的项目(如 `D:/Project/Nono/temp/decode_*.py`)优先复用,不必每次手写。
+
 > 与旧版 `save_screenshots` 不同,**单次调用只导一个节点**。需要多个截图时,逐个调用 `figma_export_node`,然后自己汇总到目录。
 
 ### 7.2 保存前检查
 
 - 首次保存前 `mkdir -p` 目标目录。
 - 重新导出时 `rm -f` 旧文件,避免读到旧图。
+
+### 7.3 `figma-save-export.mjs` —— base64 → PNG 写盘助手
+
+`figma_export_node` 返回的 `data` 字段是 base64 PNG 字符串,工具自身**不写盘**。每次手写 `base64.b64decode` + `writeFileSync` 既啰嗦又容易漏 magic 校验。本脚本封装**校验 + 写盘**两步。
+
+**工具位置**:`D:/ai-skills/figma-guide/scripts/figma-save-export.mjs`
+
+> `~/.claude/skills/figma-guide/scripts/` 是 `sync-skills` 维护的同一份镜像;**日常改动只改源仓库**,然后 `sync-skills` 同步。
+
+**三种入参方式**:
+
+```bash
+# A. 命令行参数(短 base64 推荐)
+node figma-save-export.mjs --base64 "<data>" --out <absDir> [--name <file.png>]
+
+# B. stdin(长 base64,避免命令行长度溢出)
+echo "<data>" | node figma-save-export.mjs --stdin --out <absDir> [--name <file.png>]
+
+# C. JSON 文件(适合 tool result 直接 dump 到文件)
+node figma-save-export.mjs --in <result.json> --out <absDir> [--name <file.png>]
+```
+
+**关键行为**:
+
+| 项 | 行为 |
+|---|---|
+| `--name` 缺省 | `figma-export-{YYYYMMDD-HHMMSS}-{random4}.png` |
+| 自动补 `.png` 后缀 | 是 |
+| 同名文件 | 默认拒绝(`exit 3`),传 `--overwrite` 允许 |
+| PNG magic 校验 | 强制(`89 50 4E 47 0D 0A 1A 0A`),非 PNG `exit 4` |
+| 自动 `mkdir -p` | 是 |
+| 输出 | JSON `{success, path, name, bytes, sha256_prefix}` 到 stdout |
+
+**退出码**:
+
+| Code | 含义 |
+|---|---|
+| 0 | 成功 |
+| 1 | 参数错误(三选一来源未指定 / 缺 `--out`) |
+| 2 | base64 解码失败 / 解码后为空 |
+| 3 | 文件已存在且未传 `--overwrite` |
+| 4 | PNG magic 校验失败(给的不是 PNG) |
+
+**Claude 完整工作流**:
+
+```
+1. mcp__figma-mcp-bridge__figma_export_node(nodeId, format="PNG", scale=2)
+   → 拿到 { data: "<base64>", format, scale, size, success }
+
+2. echo "<data>" | node <skill>/scripts/figma-save-export.mjs --stdin --out <项目根>/temp/figma --name 791-479-homepage.png
+   → 拿 JSON: { success, path, bytes, sha256_prefix }
+
+3. Read file_path=<path>     ← §7.0 强制,不能省
+   → 目视核对文字/颜色/对齐
+
+4. 向用户报告"已 Read 截图,确认 X / Y / Z"
+```
+
+**反例**:
+
+```diff
+- ❌ 跳过 PNG magic 校验直接写盘(给错 data 会落一个伪 PNG,Read 时一脸懵)
+- ❌ 每次都手写 `base64.b64decode` + `writeFileSync`(违反 §8.1 批量 + §7.3 复用)
+- ❌ 不传 `--name` 又不复用 random 后缀,导致多次截图互相覆盖
+- ❌ 把 base64 直接塞 `Write` 工具的 file_path(Write 写文本,PNG 是二进制会坏)
+```
 
 ---
 
@@ -352,12 +493,9 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
 
 ### 9.2 工具位置
 
-`<skill>/scripts/figma-resize.mjs`
+`D:/ai-skills/figma-guide/scripts/figma-resize.mjs`
 
-- 项目本地:`D:/ai-skills/figma-guide/scripts/figma-resize.mjs`
-- 全局 skill:`C:/Users/18906/.claude/skills/figma-guide/scripts/figma-resize.mjs`
-
-> 两份内容一致,**改一份后同步另一份**。
+> `~/.claude/skills/figma-guide/scripts/` 是 `sync-skills` 维护的同一份镜像;**日常改动只改源仓库**,然后 `sync-skills` 同步。
 
 ### 9.3 三种重算模式
 
@@ -442,10 +580,9 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
 
 ### 10.2 工具位置
 
-`<skill>/scripts/figma-validate-bounds.mjs`
+`D:/ai-skills/figma-guide/scripts/figma-validate-bounds.mjs`
 
-- 项目本地:`D:/ai-skills/figma-guide/scripts/figma-validate-bounds.mjs`
-- 全局 skill:`C:/Users/18906/.claude/skills/figma-guide/scripts/figma-validate-bounds.mjs`
+> `~/.claude/skills/figma-guide/scripts/` 是 `sync-skills` 维护的同一份镜像;**日常改动只改源仓库**,然后 `sync-skills` 同步。
 
 ### 10.3 检测规则
 
@@ -574,3 +711,322 @@ AI 心算缩放坐标也容易差 1-2px,累积下来肉眼可见的错位。
 - [ ] 未擅自修改或删除项目已交付的内容
 - [ ] **改动任何复合组件父框 `w/h` 后,运行 §10 `figma-validate-bounds.mjs` 验证子树无越界(exit=0 才算通过)**
 - [ ] **越界违规存在时,运行 §9 `figma-resize.mjs` 重算子节点坐标,再下发 `figma_move_nodes` / `figma_resize_nodes` — 不要凭印象算**
+- [ ] **升 Component 之前确认结构和样式都对**(升完是快照,instance 不会自动同步,见 §3.4 #4)
+- [ ] **改 Instance 子样式前确认走 swap / detach / master 三选一**,不强行改只读属性(见 §3.4 #3)
+- [ ] **文字节点固定 `textAutoResize="HEIGHT"` 或 NONE**,不让 WIDTH_AND_HEIGHT 自动撑破布局(见 §3.4 #6)
+- [ ] **截图 Read 核对视觉效果** —— 不只信 `figma_export_node` 返回成功(见 §7.0)
+- [ ] **base64 写盘用 §7.3 `figma-save-export.mjs`**,不手写 `base64.b64decode`(magic 校验 + 默认拒绝覆盖是脚本保证的,手写易漏)
+- [ ] **若使用 CLI(§12):先 `call figma_get_context --json '{}'` 确认 bridge 连接(exit=0 && `ok:true`);用 canonical `call` + `--json` 形式,不走 short form 传嵌套对象;长 JSON 用 `--json-file` 走文件**
+- [ ] **若使用 fork-only 工具(§13,如 prototype reactions):先查 `.tools/figma-bridge-fork/CLAUDE.md` 拿 runtime 约束,不要凭印象写;URL / OVERLAY / matchLayers / SCROLL_TO 都有限制(见 fork/CLAUDE.md 31-35 条)**
+- [ ] **跨项目用 CLI 时确认端口**:默认 3055;若改端口用 `FIGMA_BRIDGE_PORT=3057` 或 `--port 3057` 显式传
+
+---
+
+## 12 · Figma CLI(可独立发布的 `@nono/figma-cli`)
+
+### 12.0 Bootstrap — 从零装起来
+
+**给别人 / 给自己换台机器** 都按这 4 步装。**当前用户**(就是 Nono 项目本地用)跳到 §12.1 看怎么调,但 §12.0 留着做"上手指引"。
+
+#### Step 1 · 前置依赖
+
+| 依赖 | 版本 | 验证命令 |
+|---|---|---|
+| Node.js | ≥ 18.0(实测 24.13.0 / 包要 `engines.node: ">=18"`) | `node --version` |
+| npm | ≥ 9(随 Node.js 一起装) | `npm --version` |
+| Figma 桌面 | 最新版(运行在 macOS / Windows / Linux) | 在 desktop 装 Claude Bridge plugin |
+| Figma plugin "Claude Bridge" | fork 或 upstream 任一 | plugin UI 里启一个 WS server,默认端口 3055 |
+| `@magic-spells/figma-mcp-bridge` | ≥ 0.3.0 | 由 CLI 自动拉,不用单独装 |
+
+#### Step 2 · 安装 CLI(3 种任选)
+
+```bash
+# A. 从 npm(发布后)
+npm install -g @nono/figma-cli
+# → `figma` 进 PATH
+
+# B. 从 GitHub 仓库(npm publish 之前)
+git clone https://github.com/JunNanLYS/figma-cli
+cd figma-cli && npm install
+# 二进制在 ./node_modules/.bin/figma 或 ./cli.js
+
+# C. 从本地 tarball(本地测试用)
+npm pack          # 在 figma-cli 目录里
+npm install -g ./nono-figma-cli-0.1.0.tgz
+```
+
+#### Step 3 · 启动 bridge server
+
+CLI 不会自己起 bridge server,**它只是个 client**。需要同时跑:
+
+```bash
+# 上游默认端口 3055
+npx @magic-spells/figma-mcp-bridge
+
+# 或 fork(本项目,用 .tools/figma-bridge-fork/)
+node D:/Project/Nono/.tools/figma-bridge-fork/src/index.js
+# 端口可在 Figma plugin UI 里改(默认 3055)
+```
+
+> 不启动 bridge 就跑 CLI,第一步 `figma_get_context` 会返回 `connected: false`(exit=0 但 ok:true)— 不是 bug,是「plugin 未连接」的提示。
+
+#### Step 4 · 验证
+
+```bash
+which figma                    # 装了应该指向 npm 全局 bin
+figma --list | head            # 34 个工具的清单
+figma call figma_get_context --json '{}'
+# → "ok": true, "data": { "connected": true|false, ... }
+```
+
+如果 `which figma` 没输出,说明 npm 全局 bin 不在 PATH:
+
+```bash
+npm config get prefix                    # 找 global prefix
+# Windows 默认: C:\Users\<you>\AppData\Roaming\npm
+# 把 <prefix>/bin 加到 PATH(Windows: <prefix> 也加,因为 .cmd 在 prefix 根)
+```
+
+#### 已知坑
+
+| 坑 | 表现 | 解决 |
+|---|---|---|
+| `node: bad option` | 装了 Windows Microsoft Store 的 node alias | 用 `nvm` / `scoop` / 官网 installer,不用 Store 版 |
+| `figma: command not found` | npm global bin 不在 PATH | 见 Step 4 末尾 |
+| `figma` 在 PATH 但版本不是 0.1.0 | 老的本地副本仍在 PATH 里 | `which -a figma` 看所有位置,改 PATH 顺序 |
+| 端口 3055 被占 | stderr 出现 `[FigmaBridge] Port 3055 in use, trying 3056` | 这其实是 fallback,**不是错**;Figma plugin UI 改同端口就好 |
+
+#### 反例
+
+```diff
+- ❌ 跳过 Step 3 起 bridge server,直接调 CLI(得到 connected:false 还以为 CLI 坏了)
+- ❌ 用 Microsoft Store 的 Node.js(它 `node` 是 stub,要装官网版或 nvm)
+- ❌ npm install -g 后 `figma --list` 报 "command not found"(没把 prefix/bin 加到 PATH)
+- ❌ 把 npmm 全局 bin 当用户 bin 写权限失败(npm config set prefix 改到 ~/.npm-global)
+
+---
+
+### 12.1 它是什么 + 何时用
+
+`@nono/figma-cli` 是 figma-bridge 的 **CLI 包装器**:把 `mcp__figma-mcp-bridge__*` **34 个工具**接出来,每条命令 stdin/stdout 都是单 JSON 文档。
+
+| 场景 | 走 MCP 还是 CLI |
+|---|---|
+| Claude 实时交互对话 | **MCP bridge**(流式、可见) |
+| 写脚本一次性批量(导出 N 张图,改 N 个节点) | **CLI**(可重放,可跑 CI) |
+| CI / 自动化 | **CLI**(MCP 不在 headless 环境) |
+| 调试 / 手测一次 | CLI short form + `--list` |
+| fork-only 工具(prototype reactions / flow starting points) | 仍走 MCP bridge(server 换 fork) |
+| Claude 想把结果再读回上下文 | **MCP**(CLI 输出要再 `Read` JSON 文件才能看) |
+
+> 默认装完 CLI 就已经能用 —— **不需要**再 clone 项目仓库的 `.tools/figma-cli/`。本机原来的副本可以保留也可以删除,§12.2 的命令对两份都通(命令行相同)。
+
+### 12.2 调用约定
+
+> **3 种形式:已 publish → `figma`;本地 tarball → `npx figma`;本地仓库 → node 路径**
+
+```bash
+# 形式 A(已装 CLI):全局命令 `figma` —— 已 publish / npm install -g 后用这条
+figma call figma_get_context --json '{}'
+figma call figma_create_rectangle --json '{"x":100,"y":100,"width":50,"height":50,"parentId":"0:1","fills":{"color":"#FF0000"}}'
+
+# 形式 B(用 npx,不依赖全局 PATH)
+npx -y @nono/figma-cli call figma_get_context --json '{}'
+
+# 形式 C(从 Nono 项目本地仓库,未 publish 阶段)
+node D:/Project/Nono/.tools/figma-cli/cli.js call figma_get_context --json '{}'
+
+# short form(人类手测友好,每个工具一个子命令)
+figma figma_list_pages
+
+# 长 JSON 走文件,避免命令行溢出
+figma call figma_export_node --json-file ./args.json
+
+# 跨端口(默认 3055;bridge 端用 -p <port>,client 端用 FIGMA_BRIDGE_PORT)
+FIGMA_BRIDGE_PORT=3057 figma call figma_list_pages --json '{}'
+
+# 端口被占用时,FigmaBridge 自动尝试下一个空闲端口(3055→3056→…)
+# 看 stderr 的 "[FigmaBridge] Port N in use, trying N+1" 知道当前会话用的是哪个
+
+# 列出所有工具(34 个,带 description + input JSON Schema)
+figma --list
+figma list
+```
+
+> **A / B / C 三种形式指向同一份代码**。改 CLI 就改 `@nono/figma-cli` 仓库,pull 后重 `npm install -g` 或跑 `npx -y`。
+
+### 12.3 I/O 契约(单一 JSON)
+
+```
+stdout: 永远是 1 个 JSON 文档(成功 payload 或 error envelope)
+stderr: bridge 日志 + CLI usage hints,不污染 stdout
+exit code:
+  0  成功
+  1  CLI/参数错误(bad JSON / 缺 required / 未知 tool)
+  2  bridge/business 错误(Figma 返回 error / NOT_CONNECTED 等业务错)
+  3  transport 错误(超时 / 连接断开)
+```
+
+成功 envelope:
+
+```json
+{
+  "ok": true,
+  "tool": "figma_get_context",
+  "data": { "connected": true, "documentInfo": {...}, "currentPage": {...} }
+}
+```
+
+失败 envelope:
+
+```json
+{
+  "ok": false,
+  "tool": "figma_get_context",
+  "error": { "code": "NOT_CONNECTED", "message": "..." }
+}
+```
+
+> CLI 已经解开了 MCP 原生 envelope(`{content:[{text:"..."}], isError}`),所以直接读 `r.data` / `r.error` 即可,不要再去 parse `content[0].text`。
+
+### 12.4 MCP vs CLI 怎么选
+
+| 场景 | 推荐 |
+|---|---|
+| Claude 实时交互对话 | **MCP bridge**(流式、可见) |
+| 写脚本一次性批量(导出 N 张图,改 N 个节点) | **CLI**(可重放,可跑 CI) |
+| 调试 / 手测一次 | CLI short form + `--list` |
+| fork-only 工具(prototype reactions / flow starting points) | 仍走 MCP bridge(只是 server 换 server) |
+| Claude 想把结果再读回上下文 | **MCP**(CLI 输出要再 `Read` JSON 文件才能看) |
+
+### 12.5 关键工具分类(34 个)
+
+| 分类 | 工具 |
+|---|---|
+| **query** | `figma_get_context` / `figma_list_pages` / `figma_get_nodes` / `figma_search_nodes` / `figma_search_variables` / `figma_get_local_variables` / `figma_search_components` |
+| **mutation — appearance** | `figma_set_fills` / `figma_set_strokes` / `figma_set_opacity` / `figma_set_corner_radius` / `figma_set_effects` / `figma_set_text` / `figma_set_text_style` / `figma_set_auto_layout` |
+| **mutation — structure** | `figma_create_rectangle` / `figma_create_frame` / `figma_create_ellipse` / `figma_create_text` / `figma_delete_nodes` / `figma_clone_nodes` / `figma_move_nodes` / `figma_resize_nodes` / `figma_group_nodes` / `figma_ungroup_nodes` / `figma_rename_node` |
+| **selection / viewport** | `figma_set_selection` / `figma_set_current_page` / `figma_export_node` |
+| **variables / styles** | `figma_set_variable` / `figma_create_variable` / `figma_create_variable_collection` / `figma_create_paint_style` / `figma_create_text_style` |
+
+完整清单 + input schema:
+
+```bash
+figma list        # 已装 CLI 时
+npx -y @nono/figma-cli list   # 临时用 npx
+```
+
+### 12.6 工艺纪律(Claude 调 CLI 时)
+
+- **已装就用 `figma`**;**没装 / 不在 PATH 用 `npx -y @nono/figma-cli`**;**有未发布本地副本用 `node <repo>/cli.js`** — 三种形式同等幂(走同一份代码)
+- 用 **canonical `call` + `--json`** 形式;**不要** 走 short form 传嵌套对象(`fills: { color: "#FF0000" }` 等,zod 解析不上,见 cli.js:193-226)
+- **第一步必须 pollUntilConnected**:3s 间隔 × 60s 超时,`figma call figma_get_context --json '{}'` 直到 `connected: true`。直接调业务工具,上来就 NOT_CONNECTED
+- exit code 区分业务错 vs transport 错:**exit=2 看 stderr message**;**exit=3 retry 一下**(可能是 keepalive 断)
+- 长 JSON(>8KB)走 `--json-file <path>`,走命令行会被 Windows arglist 截断
+- base64 导出后写盘**不**在这里调 — 还是走 §7.3 `figma-save-export.mjs`,CLI 返回的 `data` 字段直接喂它
+
+**轮询范式**(抄 `@nono/figma-cli` 仓库 `e2e.js`,或直接跑 `npm test`):
+
+```js
+async function pollUntilConnected(timeoutMs = 60000) {
+  const start = Date.now();
+  let attempt = 0;
+  while (Date.now() - start < timeoutMs) {
+    attempt++;
+    const { code, stdout } = await runCli('call', 'figma_get_context', '{"":""}'.replace('"":""','{}'));
+    if (code === 0) {
+      const payload = JSON.parse(stdout);
+      if (payload?.data?.connected === true) return payload.data;
+    }
+    await sleep(3000);
+  }
+  throw new Error(`Plugin did not connect within ${timeoutMs}ms`);
+}
+```
+
+### 12.7 反例
+
+```diff
+- ❌ 走 short form 传 `fills: { color: "#FF0000" }`(嵌套对象 short form 不会按 zod 解析)
+- ❌ 不读 exit code,只看 stdout 有没有内容(0 vs 2 vs 3 都"有内容")
+- ❌ 不先 pollUntilConnected 就开始调业务工具
+- ❌ 把 stdout 当多行日志 stream 来读(实际是 1 个 JSON 文档)
+- ❌ 长 JSON 直接走命令行(--json-file,见 §12.2)
+- ❌ CLI 调完再 Read() 整个 stdout JSON(>50KB 时吃 token)— 优先让 CLI 写出 `data` 字段到文件,再 Read 那个文件
+- ❌ 把 CLI 当 MCP 替代(Claude 实时对话流式友好 MCP)
+```
+
+---
+
+## 13 · figma-bridge-fork 速查
+
+### 13.1 它是什么
+
+`D:/Project/Nono/.tools/figma-bridge-fork/` 是项目**本地 fork** 版的 figma-bridge MCP server。**正典**在它的 `CLAUDE.md`(35 条 Figma-runtime 约束 + 30 FigJam + 4 Prototype + BridgeError 标准化 + Token 优化清单)。
+
+**何时需要看 §13**:你在 MCP 工具列表里看到 fork-only 工具(见 §13.3)时。
+
+### 13.2 与 upstream 关键差异(只看这 5 个)
+
+| # | 差异 | 一句话说明 |
+|---|---|---|
+| 1 | **FigJam 工具集(21 个)** | sticky / shape_with_text / connector / table / code_block / link_preview;节点在 FigJam 文件里 |
+| 2 | **Prototype 工具(4 个)** | `figma_get_reactions` / `add` / `remove` + `set_flow_starting_point`,只 Figma Design 有效 |
+| 3 | **BridgeError 标准化** | `NOT_CONNECTED` / `TIMEOUT` / `NODE_NOT_FOUND` / `INVALID_PARAMS` / `OPERATION_FAILED` 统一返回 |
+| 4 | **Token 优化** | `figma_search_variables` 替代 `get_local_variables`(25K→500);`depth` 三档(minimal/compact/full);`search_nodes` 优先于递归 `get_children` |
+| 5 | **FigJam-only 节点无法 create** | `STAMP` / `HIGHLIGHT` / `WASHI_TAPE` / `WIDGET` / `MEDIA` — Figma API 没有 factory,只能 clone |
+
+### 13.3 fork-only 工具清单
+
+```bash
+# 查 fork 实际提供哪些工具(38 个,比 upstream 12 个多)
+node D:/Project/Nono/.tools/figma-bridge-fork/src/index.js 2>&1 | head -50
+```
+
+或在 MCP server 启动后,从 Claude 工具列表里数。**数字本身不重要**,记住三类**不见于 upstream**:
+
+- FigJam 工具:21 个(看 fork/CLAUDE.md "FigJam Tools Overview" 表)
+- Prototype 工具:4 个(`figma_get_reactions` / `add` / `remove` / `set_flow_starting_point`)
+- 其它 fork-only 增强:可能 5-10 个(BridgeError 标准化、search 优化等)— 完整列表以 fork 当前 commit 为准
+
+### 13.4 使用 fork 的 5 条铁律(在 fork/CLAUDE.md 第 297-374 行)
+
+> **不在 SKILL 里复制 35 条**,只引最痛 5 条。完整约束以 fork/CLAUDE.md 为准。
+
+1. **URL action + ON_HOVER 会被拒** — 用 ON_CLICK 或 mouse trigger。
+2. **OVERLAY 的 overlayRelativePosition 要求目标 frame 上设 `overlayPosition: MANUAL`**。
+3. **SCROLL_TO 导航要求 destination 是 source container 的 scrollable 子节点,跨顶层 frame 无效**。
+4. **Reactions 用 `setReactionsAsync(newArray)`,不可直接赋值 `node.reactions`**(且要 clone,节点返回的对象是 frozen)。
+5. **`PageNode.flowStartingPoints` 是 page-level,不是 frame-level**,改动要 `getPageForNode()` 取页。
+
+### 13.5 反例
+
+```diff
+- ❌ 调 fork-only 工具但不看 fork/CLAUDE.md(runtime 报错从字面看不出来因)
+- ❌ 用 upstream `node.reactions = arr` 写法调用 fork(被 setReactionsAsync 拒)
+- ❌ ON_HOVER + URL 组合调 prototype(见 §13.4 #1)
+- ❌ OVERLAY 不设 `overlayPosition: MANUAL` 直接传 overlayRelativePosition
+- ❌ 把 fork-only 工具写到**非 fork 项目**里(普通 figma-bridge 没有这些 MCP 工具名)
+
+---
+
+## 14 · 工具一览 + 调用样例库(快速索引)
+
+不重复正文,只放索引。**章节号稳定**(memory 已锚定 §3.4 / §7.0 / §7.1 / §9 / §10 / §11)。
+
+| 章节 | 主题 | 何时查 |
+|---|---|---|
+| §1 | 工具选择(MCP 工具族) | 写任何 Figma 任务前 |
+| §2 | 组件 Page + 复用纪律 | 起新文件 / 加导航栏 / 起卡片组 |
+| §3 | 坐标放置 + NodeId 纪律 + 复合组件 6 大陷阱 | 调 `create_*` / 改父框 / 升 Component |
+| §4 | state.json 缓存 | 首次进文件 / 切换文件 / page 重命名 |
+| §5 | Token 强制(Figma Variables 优先) | 改颜色 / 字号 / 圆角 / 间距 |
+| §6 | Section 模式复刻 | 新加 Section |
+| §7 | 三步验证法 + save-export.mjs | 完成截图后 |
+| §8 | 批量 / 串行操作纪律 | 任何写操作 |
+| §9 | figma-resize.mjs 助手 | 改父框 w/h 之后 |
+| §10 | figma-validate-bounds.mjs 助手 | 改父框 w/h 之后必跑 |
+| §11 | 完工自检清单 | 任务完成前 |
+| §12 | Figma CLI(可独立 npm 安装) | 写脚本 / CI / 批量任务;**第一次**:先看 §12.0 bootstrap |
+| §13 | fork 速查 | 用 prototype / FigJam 工具时 |
+| §14 | 工具一览表(本表) | 找不到入口时 |
