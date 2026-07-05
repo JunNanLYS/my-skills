@@ -1,23 +1,22 @@
 #!/usr/bin/env node
 /**
- * figma-save-export.mjs — figma_export_node base64 → PNG 写盘助手
+ * figma-save-export.mjs — Figma 导出结果 base64 → PNG 写盘助手
  *
- * `mcp__figma-mcp-bridge__figma_export_node` 返回的 `data` 字段是 PNG 的 base64 字符串,
- * 工具自身不写盘。本脚本接收 base64,自动:
- *   1. mkdir -p 目标目录
+ * 本脚本接收导出结果里的 PNG base64 字符串，自动完成：
+ *   1. 创建输出目录
  *   2. base64 解码
  *   3. 校验 PNG magic bytes (89 50 4E 47 0D 0A 1A 0A)
  *   4. 写到磁盘
- *   5. 打印绝对路径 + 字节数,供 Claude 立即 Read
+ *   5. 输出写盘结果 JSON
  *
  * 用法:
- *   # 1. 命令行参数(base64 短时推荐)
+ *   # 1. 命令行参数(base64 较短时推荐)
  *   node figma-save-export.mjs --base64 "<data>" --out <absPath> [--name <file.png>]
  *
  *   # 2. stdin(长 base64 避免命令行溢出)
  *   echo "<data>" | node figma-save-export.mjs --stdin --out <absPath> [--name <file.png>]
  *
- *   # 3. 从 JSON 文件读(适合 export_node 结果直接 dump 到文件)
+ *   # 3. 从 JSON 文件读(适合把导出结果或纯 base64 落盘后再处理)
  *   node figma-save-export.mjs --in <result.json> --out <absPath> [--name <file.png>]
  *
  * 必选:
@@ -36,9 +35,9 @@
  *   4  PNG magic bytes 校验失败(说明给的 data 不是 PNG)
  *
  * 设计:
- *   - 不调 MCP,只做 IO + 校验
- *   - 输入数据可来自 stdin(适合 MCP tool result 直接 pipe)
- *   - 自动校验 PNG magic,避免把 base64 写到一个空 / 错误文件上
+ *   - 只做本地 IO + 校验
+ *   - 输入数据可来自命令行、stdin 或 JSON 文件
+ *   - 自动校验 PNG magic,避免把错误数据写成伪图片
  */
 
 import { mkdirSync, writeFileSync, existsSync, statSync, readFileSync } from "node:fs";
@@ -85,7 +84,7 @@ function parseArgs() {
 }
 
 function printUsage() {
-  console.log(`figma-save-export.mjs — figma_export_node base64 → PNG 写盘
+  console.log(`figma-save-export.mjs — Figma 导出结果 base64 → PNG 写盘
 
 用法:
   node figma-save-export.mjs --base64 "<data>" --out <absDir> [--name <file.png>]

@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * figma-validate-bounds.mjs — 子组件越界检测器
+ * figma-validate-bounds.mjs — 子节点越界检测器
  *
- * 递归遍历根组件的整棵子树,检查每个父节点能否完全包住所有直接子节点。
- * 一旦发现 child 部分超出 parent bounds 即记录违规。
+ * 递归遍历根节点的整棵子树，检查每个父节点是否能完全包住所有直接子节点。
+ * 一旦发现 child 部分超出 parent bounds，即记录违规。
  *
  * 用法:
  *   node figma-validate-bounds.mjs <rootNodeId> [--config <json>] [--figma-json <json>] [--strict] [--tolerance <n>]
  *
- * 两种输入格式 (二选一):
+ * 两种输入格式（二选一）：
  *
- * (1) --config (平铺递归树,Claude 手工拼装):
+ * (1) --config（递归树）:
  *   {
  *     "root": {
  *       "id": "47:212",
@@ -22,7 +22,7 @@
  *     }
  *   }
  *
- * (2) --figma-json (id-indexed 平铺字典,贴近 get_nodes 返回):
+ * (2) --figma-json（id-indexed 平铺字典）:
  *   {
  *     "rootId": "47:212",
  *     "nodes": {
@@ -31,24 +31,22 @@
  *       "47:300": { "id": "47:300", "x": 100, "y": 50, "w": 200, "h": 30, "clipsContent": false, "children": [] }
  *     }
  *   }
- *   ↑ Claude 把 figma_get_nodes 拿到的多个节点直接放进 nodes 字典,无需二次拼树
+ *   ↑ 当已有批量节点数据时，直接按 id 索引组织即可，无需二次拼树
  *
- * 检测规则 (对每个 parent-child 对):
+ * 检测规则（对每个 parent-child 对）：
  *   child.x < 0                            → left
  *   child.y < 0                            → top
  *   child.x + child.w > parent.w           → right
  *   child.y + child.h > parent.h           → bottom
  *
  * 默认行为:
- *   - clipsContent=true 的父节点,即使子节点溢出也忽略 (设计意图就是裁)
- *   - 容差 0 (整数像素)
+ *   - clipsContent=true 的父节点，即使子节点溢出也忽略（设计意图就是裁）
+ *   - 容差 0（整数像素）
  *   - --strict 把 clipsContent=true 也算违规
  *
- * 设计: 纯计算,不调 MCP。Claude 侧负责:
- *   1) figma_get_nodes 拿节点
- *   2) 组装 --config (递归树) 或 --figma-json (平铺字典)
- *   3) 跑脚本拿 violations
- *   4) 据此决定是 set_node_properties 修还是反向 absorb (扩父 / 加 clip)
+ * 设计:
+ *   - 只做纯计算，不连接 Figma
+ *   - 调用方负责采集节点数据、组装 JSON、并决定如何应用修复
  */
 
 import { readFileSync } from "node:fs";

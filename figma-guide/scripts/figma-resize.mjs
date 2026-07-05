@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 /**
- * figma-resize.mjs — 复合组件 resize 助手
+ * figma-resize.mjs — 复合节点 resize 计算器
  *
- * Figma MCP `set_node_properties` 只改父节点 w/h,不动子节点。
- * 子节点坐标是绝对的,父框缩小时右边/下边被裁,放大时空出。
- * 本脚本封装三种重算模式,所有 set_node_properties 批量下发。
+ * 当父节点尺寸变化后，子节点往往需要重新计算位置或尺寸。
+ * 本脚本封装三种重算模式，帮助调用方先生成 dry-run plan，
+ * 再决定如何把结果应用到实际设计对象。
  *
  * 用法:
  *   node figma-resize.mjs <nodeId> --w <px> --h <px> [--mode center|scale|anchor] [--anchor tl|tr|bl|br|c] [--fileKey <key>] [--config <json>]
  *
  * --config JSON 字段:
  *   {
- *     "parent": { "x":0, "y":0, "w":360, "h":40 },   // resize 前的父框 (从 get_node 拿)
- *     "newW": 300, "newH": 40,                        // resize 后的目标尺寸
+ *     "parent": { "x":0, "y":0, "w":360, "h":40 },   // resize 前的父框
+ *     "newW": 300, "newH": 40,                            // resize 后的目标尺寸
  *     "mode": "center",
  *     "anchor": "tl",
  *     "children": [
@@ -21,12 +21,12 @@
  *   }
  *
  *   constraints 取值: "tl" | "tr" | "bl" | "br" | "t" | "b" | "l" | "r" | "scale" | null
- *   null = 不动;其它 = 按 Figma constraints 语义重算 (pin 哪边 / 等比缩放)
+ *   null = 不动; 其它 = 按约束语义重算 (pin 哪边 / 等比缩放)
  *
  * 设计:
  *   - 所有计算 Math.round,统一像素精度
- *   - 输出 JSON,列出每个子节点的新 {x, y, w, h},供 Claude 直接喂给 mcp__figma-bridge__set_node_properties
- *   - 不直接调 MCP — 留在 Claude 侧执行,本脚本只做纯计算 + dry-run 校验
+ *   - 输出 JSON,列出每个子节点的新 {x, y, w, h}
+ *   - 只做纯计算 + dry-run 校验,不连接 Figma、不下发修改
  */
 
 import { readFileSync, writeFileSync } from "node:fs";
