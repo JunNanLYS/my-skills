@@ -6,7 +6,7 @@
  * 一旦发现 child 部分超出 parent bounds，即记录违规。
  *
  * 用法:
- *   node figma-validate-bounds.mjs <rootNodeId> [--config <json>] [--figma-json <json>] [--strict] [--tolerance <n>]
+ *   node figma-validate-bounds.mjs <rootNodeId> [--config <json|path>] [--figma-json <json|path>] [--strict] [--tolerance <n>]
  *
  * 两种输入格式（二选一）：
  *
@@ -31,28 +31,54 @@
  *       "47:300": { "id": "47:300", "x": 100, "y": 50, "w": 200, "h": 30, "clipsContent": false, "children": [] }
  *     }
  *   }
- *   ↑ 当已有批量节点数据时，直接按 id 索引组织即可，无需二次拼树
  *
  * 检测规则（对每个 parent-child 对）：
- *   child.x < 0                            → left
- *   child.y < 0                            → top
- *   child.x + child.w > parent.w           → right
- *   child.y + child.h > parent.h           → bottom
+ *   child.x < 0                  → left
+ *   child.y < 0                  → top
+ *   child.x + child.w > parent.w → right
+ *   child.y + child.h > parent.h → bottom
  *
  * 默认行为:
- *   - clipsContent=true 的父节点，即使子节点溢出也忽略（设计意图就是裁）
+ *   - clipsContent=true 的父节点，即使子节点溢出也忽略（设计意图就是裁切）
  *   - 容差 0（整数像素）
  *   - --strict 把 clipsContent=true 也算违规
  *
- * 设计:
- *   - 只做纯计算，不连接 Figma
- *   - 调用方负责采集节点数据、组装 JSON、并决定如何应用修复
+ * 退出码:
+ *   0  全部通过
+ *   1  发现越界
+ *   2  参数错误 / 输入 JSON 不合法 / 节点数据不合法
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { argv, exit } from "node:process";
 
-// ---------- CLI ----------
+function fail(message, code = 2) {
+  console.error(message);
+  exit(code);
+}
+
+function printUsage() {
+  console.log(`Usage: node figma-validate-bounds.mjs <rootNodeId> [--config <json|path>] [--figma-json <json|path>] [--strict] [--tolerance <n>]
+       --config     递归树,字段: root.x/y/w/h/children(嵌套)
+       --figma-json 平铺字典,字段: rootId + nodes[id].x/y/w/h/children[ids]
+
+Exit codes:
+  0  all clear
+  1  violations found
+  2  invalid args / invalid input`);
+}
+
+function parseNumberArg(name, raw, { min = null } = {}) {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) {
+    fail(`Invalid ${name}: ${raw}`);
+  }
+  if (min !== null && value < min) {
+    fail(`${name} must be >= ${min}, got ${value}`);
+  }
+  return value;
+}
 
 function parseArgs() {
   const args = argv.slice(2);
@@ -60,273 +86,350 @@ function parseArgs() {
     printUsage();
     exit(0);
   }
+
   const rootId = args[0];
-  const opts = { config: null, figmaJson: null, fileKey: null, strict: false, tolerance: 0 };
-  for (let i = 1; i < args.length; i++) {
-    const a = args[i];
-    if (a === "--config") opts.config = args[++i];
-    else if (a === "--figma-json") opts.figmaJson = args[++i];
-    else if (a === "--fileKey") opts.fileKey = args[++i];
-    else if (a === "--strict") opts.strict = true;
-    else if (a === "--tolerance") opts.tolerance = Number(args[++i]);
-    else {
-      console.error(`Unknown arg: ${a}`);
-      printUsage();
-      exit(1);
-    }
+  if (!rootId) {
+    fail("rootNodeId required");
   }
-  if (!rootId) { console.error("rootNodeId required"); exit(1); }
+
+  const opts = {
+    config: null,
+    figmaJson: null,
+    fileKey: null,
+    strict: false,
+    tolerance: 0,
+  };
+
+  for (let i = 1; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === "--config") opts.config = args[++i];
+    else if (arg === "--figma-json") opts.figmaJson = args[++i];
+    else if (arg === "--fileKey") opts.fileKey = args[++i];
+    else if (arg === "--strict") opts.strict = true;
+    else if (arg === "--tolerance") opts.tolerance = parseNumberArg("tolerance", args[++i], { min: 0 });
+    else fail(`Unknown arg: ${arg}`);
+  }
+
   if (opts.config && opts.figmaJson) {
-    console.error("--config and --figma-json are mutually exclusive");
-    exit(2);
+    fail("--config and --figma-json are mutually exclusive");
   }
   if (!opts.config && !opts.figmaJson) {
-    console.error("Need either --config or --figma-json");
-    exit(2);
+    fail("Need either --config or --figma-json");
   }
+
   return { rootId, opts };
 }
 
-function printUsage() {
-  console.log(`Usage: node figma-validate-bounds.mjs <rootNodeId> [--config <json>] [--figma-json <json>] [--strict] [--tolerance <n>]`);
-  console.log(`       --config     递归树,字段: root.x/y/w/h/children(嵌套)`);
-  console.log(`       --figma-json 平铺字典,字段: rootId + nodes[id].x/y/w/h/children[ids]`);
+function readInput(source, label) {
+  if (typeof source !== "string" || source.trim() === "") {
+    fail(`${label} cannot be empty`);
+  }
+
+  const trimmed = source.trim();
+  const resolved = resolve(trimmed);
+  if (existsSync(resolved)) {
+    return readFileSync(resolved, "utf8");
+  }
+  return trimmed;
 }
 
-// ---------- 输入适配 ----------
-
-/**
- * 从 --config 读取 root
- */
-function loadFromConfig(opts) {
-  const raw = readIfPath(opts.config);
-  const parsed = JSON.parse(raw);
-  if (!parsed.root) { console.error("config.root required"); exit(2); }
-  return parsed.root;
+function parseJsonInput(source, label) {
+  try {
+    return JSON.parse(readInput(source, label));
+  } catch (error) {
+    fail(`Invalid ${label} JSON: ${error.message}`);
+  }
 }
 
-/**
- * 从 --figma-json 平铺字典构建递归树
- *
- * 输入: { rootId, nodes: { id: {id, x, y, w, h, clipsContent?, children:[ids]} } }
- * 输出: 嵌套递归树,根节点的 id === rootId
- *
- * 缺失节点的 children 视为空数组(不报错,只当叶子)。
- * children 数组里引用了 nodes 里没有的 id → 警告但继续(避免一个坏引用让整棵树挂掉)。
- */
-function loadFromFigmaJson(opts, rootId) {
-  const raw = readIfPath(opts.figmaJson);
-  const parsed = JSON.parse(raw);
-  if (!parsed.nodes) { console.error("figma-json.nodes required"); exit(2); }
-  if (parsed.rootId && parsed.rootId !== rootId) {
-    console.warn(`[warn] figma-json.rootId (${parsed.rootId}) !== rootNodeId arg (${rootId})`);
+function finiteNumber(value, path) {
+  if (!Number.isFinite(value)) {
+    fail(`${path} must be a finite number, got ${value}`);
   }
-  const nodes = parsed.nodes;
-  const missing = [];
-  const built = new Map();
+  return value;
+}
 
-  function build(id) {
-    if (built.has(id)) return built.get(id);
-    const n = nodes[id];
-    if (!n) {
-      missing.push(id);
-      return null;
-    }
-    const childIds = Array.isArray(n.children) ? n.children : [];
-    const children = [];
-    for (const cid of childIds) {
-      const c = build(cid);
-      if (c) children.push(c);
-    }
-    const treeNode = {
-      id: n.id ?? id,
-      name: n.name ?? null,
-      type: n.type ?? null,
-      x: n.x ?? 0,
-      y: n.y ?? 0,
-      w: n.w ?? 0,
-      h: n.h ?? 0,
-      clipsContent: n.clipsContent === true,
-      children
-    };
-    built.set(id, treeNode);
-    return treeNode;
+function normalizeNode(node, path) {
+  if (!node || typeof node !== "object" || Array.isArray(node)) {
+    fail(`${path} must be an object`);
   }
 
-  const root = build(rootId);
-  if (!root) {
-    console.error(`rootId ${rootId} not found in figma-json.nodes`);
-    exit(2);
+  const children = node.children == null ? [] : node.children;
+  if (!Array.isArray(children)) {
+    fail(`${path}.children must be an array`);
   }
-  if (missing.length > 0) {
-    console.warn(`[warn] ${missing.length} child id(s) referenced but missing from nodes: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? "..." : ""}`);
+
+  return {
+    id: node.id ?? null,
+    name: node.name ?? null,
+    type: node.type ?? null,
+    x: finiteNumber(node.x ?? 0, `${path}.x`),
+    y: finiteNumber(node.y ?? 0, `${path}.y`),
+    w: finiteNumber(node.w ?? 0, `${path}.w`),
+    h: finiteNumber(node.h ?? 0, `${path}.h`),
+    clipsContent: node.clipsContent === true,
+    children: children.map((child, index) => normalizeNode(child, `${path}.children[${index}]`)),
+  };
+}
+
+function loadFromConfig(opts, rootId, warnings) {
+  const parsed = parseJsonInput(opts.config, "config");
+  if (!parsed.root) {
+    fail("config.root required");
+  }
+
+  const root = normalizeNode(parsed.root, "config.root");
+  if (root.id && root.id !== rootId) {
+    warnings.push(`config.root.id (${root.id}) !== rootNodeId arg (${rootId})`);
   }
   return root;
 }
 
-function readIfPath(s) {
-  if (s.endsWith(".json")) return readFileSync(s, "utf8");
-  return s;
+function loadFromFigmaJson(opts, rootId, warnings) {
+  const parsed = parseJsonInput(opts.figmaJson, "figma-json");
+  if (!parsed.nodes || typeof parsed.nodes !== "object" || Array.isArray(parsed.nodes)) {
+    fail("figma-json.nodes required");
+  }
+  if (parsed.rootId && parsed.rootId !== rootId) {
+    warnings.push(`figma-json.rootId (${parsed.rootId}) !== rootNodeId arg (${rootId})`);
+  }
+
+  const nodes = parsed.nodes;
+  const built = new Map();
+  const visiting = new Set();
+  const missing = [];
+
+  function build(id) {
+    if (built.has(id)) return built.get(id);
+    if (visiting.has(id)) {
+      fail(`Cycle detected while expanding node tree at ${id}`);
+    }
+
+    const rawNode = nodes[id];
+    if (!rawNode) {
+      missing.push(id);
+      return null;
+    }
+
+    visiting.add(id);
+    const childIds = rawNode.children == null ? [] : rawNode.children;
+    if (!Array.isArray(childIds)) {
+      fail(`figma-json.nodes[${JSON.stringify(id)}].children must be an array`);
+    }
+
+    const children = [];
+    for (const childId of childIds) {
+      const childNode = build(childId);
+      if (childNode) children.push(childNode);
+    }
+
+    visiting.delete(id);
+
+    const node = {
+      id: rawNode.id ?? id,
+      name: rawNode.name ?? null,
+      type: rawNode.type ?? null,
+      x: finiteNumber(rawNode.x ?? 0, `figma-json.nodes[${JSON.stringify(id)}].x`),
+      y: finiteNumber(rawNode.y ?? 0, `figma-json.nodes[${JSON.stringify(id)}].y`),
+      w: finiteNumber(rawNode.w ?? 0, `figma-json.nodes[${JSON.stringify(id)}].w`),
+      h: finiteNumber(rawNode.h ?? 0, `figma-json.nodes[${JSON.stringify(id)}].h`),
+      clipsContent: rawNode.clipsContent === true,
+      children,
+    };
+
+    built.set(id, node);
+    return node;
+  }
+
+  const root = build(rootId);
+  if (!root) {
+    fail(`rootId ${rootId} not found in figma-json.nodes`);
+  }
+  if (missing.length > 0) {
+    warnings.push(`${missing.length} child id(s) referenced but missing from nodes: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? "..." : ""}`);
+  }
+
+  return root;
 }
 
-// ---------- 检测核心 ----------
-
-function boxOf(node) {
-  return { x: node.x, y: node.y, w: node.w, h: node.h };
-}
-
-/**
- * 检查单个 child 是否落在 parent bounds 内
- *
- * 关键约定: child.x/y 是相对 parent 的局部坐标 (Figma REST API 默认行为)
- * 所以参考原点是 (0, 0),parent 自己的 x/y 不参与计算
- * 只有 parent 自身的 w/h 用于判定 child 是否越界
- *
- * @returns {Array<{side:string, overflow:number, childBox, parentBox}>} 违规列表 (空 = 通过)
- */
-function checkChild(parent, child, tolerance, strict) {
+function checkChild(parent, child, tolerance) {
   const violations = [];
+  const right = child.x + child.w;
+  const bottom = child.y + child.h;
 
-  // clipsContent=true 的父节点: 子溢出被裁,默认不算违规
-  if (!strict && parent.clipsContent === true) return violations;
-
-  const tol = tolerance;
-  const pw = parent.w, ph = parent.h;
-  const cx = child.x, cy = child.y;
-  const cr = cx + child.w, cb_ = cy + child.h;
-
-  if (cx < -tol) {
+  if (child.x < -tolerance) {
     violations.push({
       side: "left",
-      overflow: -cx,                      // 正数 = 溢出多少 px
-      childBox: { x: cx, y: cy, w: child.w, h: child.h },
-      parentBox: { w: pw, h: ph }
+      overflow: -child.x,
+      childBox: { x: child.x, y: child.y, w: child.w, h: child.h },
+      parentBox: { w: parent.w, h: parent.h },
     });
   }
-  if (cy < -tol) {
+  if (child.y < -tolerance) {
     violations.push({
       side: "top",
-      overflow: -cy,
-      childBox: { x: cx, y: cy, w: child.w, h: child.h },
-      parentBox: { w: pw, h: ph }
+      overflow: -child.y,
+      childBox: { x: child.x, y: child.y, w: child.w, h: child.h },
+      parentBox: { w: parent.w, h: parent.h },
     });
   }
-  if (cr > pw + tol) {
+  if (right > parent.w + tolerance) {
     violations.push({
       side: "right",
-      overflow: cr - pw,
-      childBox: { x: cx, y: cy, w: child.w, h: child.h },
-      parentBox: { w: pw, h: ph }
+      overflow: right - parent.w,
+      childBox: { x: child.x, y: child.y, w: child.w, h: child.h },
+      parentBox: { w: parent.w, h: parent.h },
     });
   }
-  if (cb_ > ph + tol) {
+  if (bottom > parent.h + tolerance) {
     violations.push({
       side: "bottom",
-      overflow: cb_ - ph,
-      childBox: { x: cx, y: cy, w: child.w, h: child.h },
-      parentBox: { w: pw, h: ph }
+      overflow: bottom - parent.h,
+      childBox: { x: child.x, y: child.y, w: child.w, h: child.h },
+      parentBox: { w: parent.w, h: parent.h },
     });
   }
+
   return violations;
 }
 
-/**
- * 递归遍历,返回违规树
- * @param {object} node 当前节点(含 children)
- * @param {number} tolerance 容差 (px)
- * @param {boolean} strict 是否把 clipsContent=true 也算违规
- */
 function walk(node, tolerance, strict) {
-  const childReports = [];
   const violations = [];
+  const childReports = [];
+  const skipByClipping = node.clipsContent === true && !strict;
 
-  if (Array.isArray(node.children)) {
-    for (const child of node.children) {
-      const cv = checkChild(node, child, tolerance, strict);
-      if (cv.length > 0) {
+  for (const child of node.children) {
+    if (!skipByClipping) {
+      const issues = checkChild(node, child, tolerance);
+      if (issues.length > 0) {
         violations.push({
           childId: child.id,
           childName: child.name ?? null,
           childType: child.type ?? null,
-          issues: cv
+          issueCount: issues.length,
+          issues,
         });
       }
-      childReports.push(walk(child, tolerance, strict));
     }
+    childReports.push(walk(child, tolerance, strict));
   }
 
-  return { id: node.id, name: node.name ?? null, type: node.type ?? null, childReports, violations };
-}
-
-// ---------- 主流程 ----------
-
-function main() {
-  const { rootId, opts } = parseArgs();
-  const root = opts.figmaJson
-    ? loadFromFigmaJson(opts, rootId)
-    : loadFromConfig(opts);
-
-  // 应用全局 tolerance / strict
-  const tol = opts.tolerance;
-  const strict = opts.strict;
-
-  const report = walk(root, tol, strict);
-  const totalViolations = countViolations(report);
-  const flat = flattenViolations(report, report.id);
-
-  const out = {
-    rootId,
-    fileKey: opts.fileKey,
-    strict,
-    tolerance: tol,
-    inputFormat: opts.figmaJson ? "figma-json" : "config",
-    summary: {
-      nodesVisited: countNodes(report),
-      violations: totalViolations,
-      parentsWithIssues: countParentsWithIssues(report)
-    },
-    violations: flat,
-    tree: report
+  return {
+    id: node.id,
+    name: node.name ?? null,
+    type: node.type ?? null,
+    clipsContent: node.clipsContent === true,
+    skippedChildrenBecauseClipped: skipByClipping ? node.children.length : 0,
+    childReports,
+    violations,
   };
-
-  console.log(JSON.stringify(out, null, 2));
-
-  if (totalViolations > 0) {
-    console.error(`\n[FAIL] ${totalViolations} violation(s) found across ${out.summary.parentsWithIssues} parent(s)`);
-    exit(1);
-  } else {
-    console.error("\n[OK] All children within parent bounds");
-    exit(0);
-  }
 }
 
-function countViolations(report) {
-  let n = 0;
-  n += report.violations.length;
-  for (const c of report.childReports) n += countViolations(c);
-  return n;
+function countNodes(report) {
+  let total = 1;
+  for (const child of report.childReports) {
+    total += countNodes(child);
+  }
+  return total;
 }
 
-function flattenViolations(report, parentId, out = []) {
-  for (const v of report.violations) {
-    out.push({ parentId: report.id, parentName: report.name, ...v });
+function countParentChildPairs(report) {
+  let total = report.childReports.length;
+  for (const child of report.childReports) {
+    total += countParentChildPairs(child);
   }
-  for (const c of report.childReports) {
-    flattenViolations(c, c.id, out);
+  return total;
+}
+
+function countViolationEdges(report) {
+  let total = report.violations.length;
+  for (const child of report.childReports) {
+    total += countViolationEdges(child);
+  }
+  return total;
+}
+
+function countTotalIssues(report) {
+  let total = report.violations.reduce((sum, violation) => sum + violation.issueCount, 0);
+  for (const child of report.childReports) {
+    total += countTotalIssues(child);
+  }
+  return total;
+}
+
+function countParentsWithIssues(report) {
+  let total = report.violations.length > 0 ? 1 : 0;
+  for (const child of report.childReports) {
+    total += countParentsWithIssues(child);
+  }
+  return total;
+}
+
+function countSkippedClippedPairs(report) {
+  let total = report.skippedChildrenBecauseClipped;
+  for (const child of report.childReports) {
+    total += countSkippedClippedPairs(child);
+  }
+  return total;
+}
+
+function flattenViolations(report, out = []) {
+  for (const violation of report.violations) {
+    out.push({
+      parentId: report.id,
+      parentName: report.name,
+      parentType: report.type,
+      ...violation,
+    });
+  }
+  for (const child of report.childReports) {
+    flattenViolations(child, out);
   }
   return out;
 }
 
-function countNodes(report) {
-  let n = 1;
-  for (const c of report.childReports) n += countNodes(c);
-  return n;
-}
+function main() {
+  const { rootId, opts } = parseArgs();
+  const warnings = [];
+  const root = opts.figmaJson
+    ? loadFromFigmaJson(opts, rootId, warnings)
+    : loadFromConfig(opts, rootId, warnings);
 
-function countParentsWithIssues(report) {
-  let n = report.violations.length > 0 ? 1 : 0;
-  for (const c of report.childReports) n += countParentsWithIssues(c);
-  return n;
+  const tree = walk(root, opts.tolerance, opts.strict);
+  const violations = flattenViolations(tree);
+  const summary = {
+    nodesVisited: countNodes(tree),
+    parentChildPairs: countParentChildPairs(tree),
+    violationEdges: countViolationEdges(tree),
+    totalIssues: countTotalIssues(tree),
+    parentsWithIssues: countParentsWithIssues(tree),
+    skippedClippedPairs: countSkippedClippedPairs(tree),
+  };
+
+  const output = {
+    rootId,
+    fileKey: opts.fileKey,
+    strict: opts.strict,
+    tolerance: opts.tolerance,
+    inputFormat: opts.figmaJson ? "figma-json" : "config",
+    warnings,
+    summary,
+    violations,
+    tree,
+  };
+
+  console.log(JSON.stringify(output, null, 2));
+
+  for (const warning of warnings) {
+    console.error(`[warn] ${warning}`);
+  }
+
+  if (summary.totalIssues > 0) {
+    console.error(`\n[FAIL] ${summary.totalIssues} issue(s) across ${summary.violationEdges} parent-child edge(s)`);
+    exit(1);
+  }
+
+  console.error("\n[OK] All checked children within parent bounds");
+  exit(0);
 }
 
 main();

@@ -2,8 +2,8 @@
 name: figma-guide
 model: sonnet
 category: design
-description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-save-export` / `figma-resize` / `figma-validate-bounds` 三个本地辅助脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 3.0
+description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
+version: 4.0
 ---
 
 ## 触发条件
@@ -24,8 +24,8 @@ version: 3.0
 6. **坐标是父容器局部坐标**：新建后先放进目标父容器，再设本地 `x / y / w / h`。
 7. **NodeId 不能凭记忆复用**：结构重排、clone、重建后都要重新读取验证。
 8. **Token 不硬编码**：颜色、字号、圆角、间距优先查项目设计系统和变量。
-9. **改父框前先查越界**：先跑 `figma-validate-bounds.mjs`，知道当前基线；必要时再用 `figma-resize.mjs` 重算。
-10. **导出图必须写盘并 Read**：先用 `figma-save-export.mjs` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
+9. **改父框时先判断是否真的需要离线审计**：优先使用 `figma-cli` 原生命令做布局与约束调整；只有怀疑父子越界、裁切或局部坐标异常时，再跑 `figma-validate-bounds.mjs` 做基线检查。
+10. **导出图优先走 CLI 原生命令并实际看图**：优先用 `figma-cli verify --save` 或 `figma-cli export ... -o ...` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
 
 ## CLI-only 主路径
 
@@ -76,8 +76,8 @@ CLI 入口已经统一，但设计执行纪律不变：
 - 先判断是否应复用组件或 clone 现有结构。
 - 再按父容器本地坐标放置和调整几何。
 - 每次结构变化后重新读取关键节点，避免拿旧 NodeId 继续写。
-- 改父框尺寸时，始终走 bounds → resize → bounds。
-- 导出图后必须写盘并 Read，不能只看“导出成功”。
+- 改父框尺寸时，优先用 CLI 的布局、pin、sizing、inspect 等原生命令处理；只有怀疑存在越界、裁切或局部坐标异常时，才运行 `figma-validate-bounds.mjs` 做离线审计。
+- 导出图后必须写盘并 Read，不能只看“导出成功”。优先使用 `figma-cli verify --save` 或 `figma-cli export ... -o ...`。
 
 复用模式、组件页纪律、Section 模式、批量/串行规则见 `references/workflow.md`。
 验证口径见 `references/validation.md`。
@@ -92,7 +92,7 @@ CLI 入口已经统一，但设计执行纪律不变：
 - `references/validation.md`
   - 何时看：需要做导出验收、截图核对、父框 resize、自检收尾时。
 - `references/scripts.md`
-  - 何时看：需要调用 `figma-save-export`、`figma-resize`、`figma-validate-bounds` 时。
+  - 何时看：需要调用 `figma-validate-bounds.mjs` 做离线几何审计时。
 
 ## 当前约束
 
