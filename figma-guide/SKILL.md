@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 4.0
+version: 5.0
 ---
 
 ## 触发条件
@@ -14,18 +14,20 @@ version: 4.0
 
 ## 规范前置摘要
 
-执行任何 Figma 任务前，先记住这 10 条：
+执行任何 Figma 任务前，先记住这 12 条：
 
 1. **统一使用同一个 CLI**：默认使用 `silships/figma-cli` 2.x，对外命令优先写 `figma-cli`。
 2. **统一遵循当前 CLI 语法**：命令形态以 `figma-cli --help` 和对应子命令 help 为准，不混用其他历史文档里的写法。
 3. **不会写命令就先问 CLI**：先跑 `figma-cli --help`，再看 `figma-cli <command> --help` / `figma-cli <command> <subcommand> --help`。
-4. **重复视觉单元先复用**：优先组件/实例或 clone，不要凭印象重画。
-5. **组件定义放在组件页**：UI 页消费复用结果，不在页面里重复定义通用组件。
-6. **坐标是父容器局部坐标**：新建后先放进目标父容器，再设本地 `x / y / w / h`。
-7. **NodeId 不能凭记忆复用**：结构重排、clone、重建后都要重新读取验证。
-8. **Token 不硬编码**：颜色、字号、圆角、间距优先查项目设计系统和变量。
-9. **改父框时先判断是否真的需要离线审计**：优先使用 `figma-cli` 原生命令做布局与约束调整；只有怀疑父子越界、裁切或局部坐标异常时，再跑 `figma-validate-bounds.mjs` 做基线检查。
-10. **导出图优先走 CLI 原生命令并实际看图**：优先用 `figma-cli verify --save` 或 `figma-cli export ... -o ...` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
+4. **创建视觉节点优先用 CLI 原生命令**：单个结构用 `render`，多个独立结构用 `render-batch`，页面级布局先看 `blocks`，不要用 `eval` 新建视觉节点。
+5. **重复视觉单元先复用**：优先 `spec` / `instantiate`、组件/实例或 clone，不要凭印象重画。
+6. **组件定义放在组件页**：UI 页消费复用结果，不在页面里重复定义通用组件。
+7. **用户要 N 个同类对象时给 N 个独立节点**：不要包成一个 wrapper Frame 或一个包含 N 项的 Component。
+8. **坐标是父容器局部坐标**：新建后先放进目标父容器，再设本地 `x / y / w / h`。
+9. **NodeId 不能凭记忆复用**：结构重排、clone、重建后都要重新读取验证。
+10. **Token 不硬编码**：颜色、字号、圆角、间距优先查项目设计系统和变量；用户命名 collection 时必须显式 `--collection <name>`。
+11. **改父框时先判断是否真的需要离线审计**：优先使用 `figma-cli` 原生命令做布局与约束调整；只有怀疑父子越界、裁切或局部坐标异常时，再跑 `figma-validate-bounds.mjs` 做基线检查。
+12. **导出图优先走 CLI 原生命令并实际看图**：优先用 `figma-cli verify --save` 或 `figma-cli export ... -o ...` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
 
 ## CLI-only 主路径
 
