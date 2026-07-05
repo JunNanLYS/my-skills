@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 7.0
+version: 8.0
 ---
 
 ## 触发条件
@@ -21,7 +21,7 @@ version: 7.0
 3. **不会写命令就先问 CLI**：先跑 `figma-cli --help`，再看 `figma-cli <command> --help` / `figma-cli <command> <subcommand> --help`。
 4. **创建视觉节点优先用 CLI 原生命令**：单个结构用 `render`，多个独立结构用 `render-batch`，页面级布局先看 `blocks`，不要用 `eval` 新建视觉节点。
 5. **改节点属性也优先用 CLI**：单个改 `set`，批量改 `set-batch`，删 / 重命名 / padding / gap / align / sizing / pin 都有对应命令；`eval` 只用于 CLI 没有的能力（Plugin API 专属、私有字段读取等）。
-6. **重复视觉单元先复用**：优先 `spec` / `instantiate`、组件/实例或 clone，不要凭印象重画。
+6. **重复视觉单元先复用**：导航栏、按钮、卡片、列表项、表格行等重复出现的视觉单元，优先 `spec` / `instantiate` / 组件 / clone / `render-batch`（页面内大量同类卡片的决策见 `references/workflow.md` §11），不要凭印象重画。
 7. **组件定义放在组件页**：UI 页消费复用结果，不在页面里重复定义通用组件。
 8. **用户要 N 个同类对象时给 N 个独立节点**：不要包成一个 wrapper Frame 或一个包含 N 项的 Component。
 9. **坐标是父容器局部坐标**：新建后先放进目标父容器，再设本地 `x / y / w / h`。
@@ -134,7 +134,7 @@ CLI 入口已经统一，但设计执行纪律不变：
 - 改父框尺寸时，优先用 CLI 的布局、pin、sizing、inspect 等原生命令处理；只有怀疑存在越界、裁切或局部坐标异常时，才运行 `figma-validate-bounds.mjs` 做离线审计。
 - 导出图后必须写盘并 Read，不能只看“导出成功”。优先使用 `figma-cli verify --save` 或 `figma-cli export ... -o ...`。
 
-复用模式、组件页纪律、Section 模式、批量/串行规则、高频节点缓存口径见 `references/workflow.md`。
+复用模式、组件页纪律、Section 模式、批量/串行规则、页面内重复卡片复用决策（§11）、高频节点缓存口径见 `references/workflow.md`。
 验证口径见 `references/validation.md`。
 本地辅助脚本参数见 `references/scripts.md`。
 
@@ -143,7 +143,7 @@ CLI 入口已经统一，但设计执行纪律不变：
 - `references/cli.md`
   - 何时看：需要确认仓库地址、安装/更新方式、Yolo 连接方式、或者想知道如何向 CLI 自查命令时。
 - `references/workflow.md`
-  - 何时看：需要处理组件页、结构复用、坐标放置、NodeId、Section、批量操作，或需要高频节点缓存口径（§5.5）时。
+  - 何时看：需要处理组件页、结构复用、坐标放置、NodeId、Section、批量操作、页面内重复卡片 / 列表项的复用决策（§11），或需要高频节点缓存口径（§5.5）时。
 - `references/validation.md`
   - 何时看：需要做导出验收、截图核对、父框 resize、自检收尾时。
 - `references/scripts.md`

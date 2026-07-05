@@ -396,3 +396,84 @@ CLI 若提示 unknown prop，按建议修正后重跑，不要忽略 warning。
 - 父容器还没确定就先写几何。
 - 结构坏了就删掉重建。
 - 为了省事用 `eval` 批量新建视觉节点。
+
+## 11. 页面内重复内容（卡片组 / 列表项 / 表格行）的复用决策
+
+UI 页里大量重复出现的局部结构（新闻列表卡片、商品卡、feed 行、表格行、用户头像列表），是复用纪律最容易掉链子的地方。这类结构既不像 NavBar 那样"够格单独上组件页"，也不能像占位框那样随手画——它的复用决策需要单独拆开讲。
+
+### 11.1 三条复用路径与决策树
+
+处理"页面内有 N 个结构相同、内容不同的卡片 / 行"时，只有这三条路径可用：
+
+1. **升 Component → 实例化**  
+   适合"卡片需要多状态 / 跨页复用 / 后续还要换皮"的场景。
+2. **clone 现有节点 → 改内容**  
+   适合"本页面里有几张同类卡片，结构和样式都不会变"的场景。一次做一个、复制 N 份、改每份的内容。
+3. **`render-batch` 一次性创建 N 份**  
+   适合"N 份卡片结构完全一致且共享同一 layout / tokens"的场景；后续想单独调整某一份，依旧可以走 `set` / `text` 命令。
+
+判断流程：
+
+```text
+本页面还是多页面？
+  ├── 多页面都要用 / 要做多状态变体 → 升 Component（或 Component Set）
+  └── 仅本页面使用
+        ├── 每份都可能要单独微调 → 先做一个 → clone N 份 → set 改内容
+        └── 每份结构和样式完全一致 → render-batch 一次性建
+```
+
+禁止路径：
+
+- 直接在 UI 页里手画 N 次相同结构（效率最低、改一处忘十处）。
+- 把 N 张卡片塞进一个 wrapper Frame 再 `node to-component`（违反 §3.2 的"不要给 wrapper 升组件"原则）。
+- 升了 Component 之后又"为了快速"用 `eval` 复制出脱缰节点（又回到 §2.2 禁止做法第一条）。
+
+### 11.2 卡片复用工作流：做一个 → clone N 份 → 改内容
+
+这是 UI 设计里最常见的一类操作流。标准节奏：
+
+```text
+1. 在 UI 页 / 目标父容器里正常做出第一份卡片（含标题、图片、文字、按钮等）
+2. figma-cli spec "Card"           →  确认它是不是 COMPONENT / INSTANCE / 普通 Frame
+3. figma-cli clone <card-id> --count (N-1) --offset <dx> <dy>
+   或 figma-cli clone <card-id>    →  重复 N-1 次到想要的位置
+4. 重新读取副本的 NodeId（clone 后节点 id 会变化）   →   关键！
+5. figma-cli set <copy-id> --text <新内容>
+   figma-cli text <copy-id> <新文案>
+   figma-cli set <copy-id> --image <新图片>
+6. 导出 verify 截图，逐张看内容是否生效、是否越界
+```
+
+要点：
+
+- **clone 后必须重读 NodeId**：违反这一步会导致后续 `set` 写错位置（参考 §5）。
+- **改内容用 `set` / `text` 命令，不要 detach 副本再手改**：detached 副本脱离主结构，将来主结构改版时副本不会跟随。
+- **N 张卡片的纵向 / 横向间距** 优先用父容器的 `gap` 或 auto-layout，而不是手动算每张的 `y`。
+- **如果卡片需要换图**：优先用 `set` 的 image 字段，不要 `delete` 旧图再 `create`。
+
+### 11.3 什么时候必须升 Component
+
+出现以下任一情况，把当前卡片"升 Component"再创建实例更划算：
+
+- 卡片在多个页面（比如首页 + 详情页 + 推荐页）都要出现。
+- 卡片有 ≥ 2 个语义状态（已读 / 未读、关注 / 已关注、收藏 / 未收藏）。
+- 后续设计迭代可能改卡片结构（比如增加 footer、改 padding）——升了 Component 后续改一处全跟随，不升则要手动改 N 次。
+- 卡片会作为 `instantiate` 来源被其他设计页 / 其他文件消费。
+
+反之，本页面静态的 5 张同结构卡片，clone 就够，不必为了"看起来规范"强行升 Component。
+
+### 11.4 常见错误
+
+| # | 错误 | 后果 | 正确做法 |
+|---|---|---|---|
+| 1 | 把 clone 出来的 N 张卡片先 `group_nodes` 再 `to-component` | 失去单卡可单独移动 / 重命名的能力 | 直接逐张 `clone`；不要套 wrapper |
+| 2 | 用 `render-batch` 建了 N 张卡片后又 `set-batch` 改全部 | `set-batch` 对同名字段是统一改，结果所有卡片变成同一份内容 | 改内容用 `set` / `text` 单卡调用，按 NodeId 区分 |
+| 3 | 卡片是 INSTANCE 但试图直接 `set` 内部文字 | INSTANCE 子项只读，set 不进去 | 用 `set text` / 暴露 `text` property、或改源 Component |
+| 4 | clone 后凭旧 NodeId 继续 set | 写入失败或错位 | clone 后跑一次 `find` / `get_children` 重读所有副本的 id |
+| 5 | "几十张卡片"整体升 Component | 拖累性能、设计后续小调整要重做 Component | 静态卡片用 clone 即可；只有 §11.3 触发条件才升 Component |
+
+### 11.5 与既有纪律的关系
+
+- §11 不能取代 §2.2 的复用优先级总表——§11 只是把"页面内重复内容"这一最难判断的场景单拆出来。
+- §11 同样遵守 §5（clone / reparent 之后必须重读 NodeId）。
+- §11 不绕开 §13（每轮修改后的 verify 截图），clone N 份卡片后必须实际看图确认内容生效。
