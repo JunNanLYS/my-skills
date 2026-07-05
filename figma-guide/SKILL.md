@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 5.2
+version: 6.0
 ---
 
 ## 触发条件
@@ -30,6 +30,27 @@ version: 5.2
 12. **导出图优先走 CLI 原生命令并实际看图**：优先用 `figma-cli verify --save` 或 `figma-cli export ... -o ...` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
 13. **终验收必须截图 + 归档**：每次交付前必须实际看图，并把验收截图统一保存到 `<当前项目根>/temp/figma-screeshot/`，命名带页面或功能语义。
 14. **高频节点缓存**：只读查询（`find` / `spec` / `instantiate` / `var list`）前，先看 `<当前项目根>/.figma/cache.json` 是否命中（按 `fileKey` 命名空间、TTL 3 天）；命中后必须二次确认 id/名称/类型一致再用；**写入路径绝不读缓存**，setter 必须基于重读。判定标准、TTL、二次确认、dirty、黑名单见 `references/workflow.md` §5.5。
+
+## 常用命令
+
+执行 Figma 任务时最常用的命令入口汇总如下。完整命令清单和子命令语法以 `figma-cli --help` 为准；详细版见 `references/cli.md`。
+
+| 意图 | 命令 |
+|---|---|
+| 连接 / 检查 Figma | `figma-cli connect` / `figma-cli status` / `figma-cli files` |
+| 查找节点 / 看画布 | `figma-cli find "Name"` / `figma-cli canvas info` |
+| 创建单个 frame | `figma-cli render '<Frame>...</Frame>'` |
+| 创建 N 个独立同类节点 | `figma-cli render-batch '[...]' --direction row\|col` |
+| 创建 dashboard / 页面级布局 | `figma-cli blocks list` 后 `figma-cli blocks create <block>` |
+| 添加 shadcn 原语 | `figma-cli shadcn add <component> [--count N]` |
+| 复用已有组件 | `figma-cli spec "Name"` 后 `figma-cli instantiate "Name"` |
+| 转成组件 | `figma-cli node to-component "NODE_ID"` |
+| 创建 / 查看变量 | `figma-cli var list` / `figma-cli var visualize` |
+| 验证并截图 | `figma-cli verify --save` / `figma-cli export ... -o ...` |
+| 撤销上一步 | `figma-cli undo` |
+| 导入 token / DESIGN.md | `figma-cli import <file>` |
+| 导出设计系统文档 | `figma-cli extract [output.md]` |
+| 不知道命令怎么写 | `figma-cli --help` → `figma-cli <command> --help` |
 
 ## CLI-only 主路径
 
