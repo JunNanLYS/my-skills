@@ -2,43 +2,23 @@
 
 Figma 工程执行时，主文档只给主路径；本文件负责展开“怎么做结构与布局”。
 
-## 1. 文件 / 页面上下文缓存
+## 1. 先用 CLI 自查当前上下文
 
-推荐缓存位置：
+本 Skill 不再维护旧的上下文读取命令清单，也不要求固定缓存 `state.json`。
 
-```json
-<项目根>/.figma/state.json
-```
+执行任务前，先通过新 CLI 自查：
 
-推荐字段：
+1. `figma-cli status`：看是否已连接、daemon 是否正常。
+2. `figma-cli files`：看当前打开了哪些 Figma 文件。
+3. 不知道还有什么上下文命令，就先跑：
+   - `figma-cli --help`
+   - `figma-cli <command> --help`
+   - `figma-cli <command> <subcommand> --help`
 
-```json
-{
-  "fileId": "unknown",
-  "fileName": "Nono",
-  "currentPageId": "0:1",
-  "currentPageName": "UI设计",
-  "pages": [
-    { "id": "0:1", "name": "UI设计" },
-    { "id": "127:771", "name": "组件" }
-  ],
-  "updatedAt": "2026-06-28T12:00:00Z"
-}
-```
+原则：
 
-开始任务时：
-
-1. 先检查 `<项目根>/.figma/state.json` 是否存在。
-2. 若存在，读出 `fileId`、`currentPageId`、`pages` 作为入口上下文。
-3. 若不存在，先读取当前文件身份与页面列表，再写入缓存。
-4. 不管是否命中缓存，都要继续读取目标 page 内的节点树。
-
-以下情况应刷新缓存：
-
-- 切换到新的 Figma 文件。
-- 当前文件 ID 与缓存不一致。
-- page 被重命名。
-- page 被新增或删除。
+- 由 CLI 的当前 help 作为命令真相。
+- 本 Skill 只保留设计执行纪律，不再复写一套会过期的命令索引。
 
 ## 2. 组件页与复用纪律
 
