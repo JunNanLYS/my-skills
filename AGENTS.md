@@ -26,3 +26,18 @@ git push origin main
 ```
 
 Do not leave uncommitted or unpushed changes in the working tree. Every task ends with a clean, pushed state.
+
+## Auto Sync After Push
+
+A project-level Claude Code hook is configured in `.claude/settings.json`.
+
+When Claude Code executes a successful `Bash` command matching `git push *` from this repository, the hook automatically runs:
+
+```bash
+node sync-skills.mjs --only-changed -v
+```
+
+Agent guidance:
+- Treat the sync as automatic after Claude-driven pushes; do not run a second manual sync unless the user asks or the hook needs troubleshooting.
+- If the user pushes outside Claude Code, the hook does not run, so manual sync may still be needed.
+- If hook behavior changes, keep this file, `CLAUDE.md`, and `.claude/settings.json` aligned.

@@ -1,0 +1,19 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "repo_root=$(git rev-parse --show-toplevel 2>/dev/null) && cd \"$repo_root\" && node \"$repo_root/sync-skills.mjs\" --only-changed -v 2>/dev/null || true",
+            "shell": "bash",
+            "timeout": 600,
+            "statusMessage": "Syncing skills after git push"
+          }
+        ]
+      }
+    ]
+  }
+}
