@@ -14,7 +14,7 @@ version: 5.0
 
 ## 规范前置摘要
 
-执行任何 Figma 任务前，先记住这 12 条：
+执行任何 Figma 任务前，先记住这 13 条：
 
 1. **统一使用同一个 CLI**：默认使用 `silships/figma-cli` 2.x，对外命令优先写 `figma-cli`。
 2. **统一遵循当前 CLI 语法**：命令形态以 `figma-cli --help` 和对应子命令 help 为准，不混用其他历史文档里的写法。
@@ -28,6 +28,7 @@ version: 5.0
 10. **Token 不硬编码**：颜色、字号、圆角、间距优先查项目设计系统和变量；用户命名 collection 时必须显式 `--collection <name>`。
 11. **改父框时先判断是否真的需要离线审计**：优先使用 `figma-cli` 原生命令做布局与约束调整；只有怀疑父子越界、裁切或局部坐标异常时，再跑 `figma-validate-bounds.mjs` 做基线检查。
 12. **导出图优先走 CLI 原生命令并实际看图**：优先用 `figma-cli verify --save` 或 `figma-cli export ... -o ...` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
+13. **终验收必须截图 + 归档**：每次交付前必须实际看图，并把验收截图统一保存到 `<当前项目根>/temp/figma-screeshot/`，命名带页面或功能语义。
 
 ## CLI-only 主路径
 
