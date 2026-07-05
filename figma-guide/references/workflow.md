@@ -148,6 +148,18 @@ figma-cli blocks create <block-name>
 创建节点 → 放入目标父容器 → 设本地坐标 / 尺寸 → 重新读取关键节点验证
 ```
 
+### 4.3 改几何用 CLI 命令，别走 eval
+
+以下操作直接走原生命令，比 `eval` 安全、可读、可撤销（完整列表见 `SKILL.md` 常用命令）：
+
+- 单节点改 `x/y/w/h/fill/radius` → `figma-cli set <nodeId> --x --y --w --h --fill --radius`
+- 批量改多个节点 → `figma-cli set-batch '[{...},{...}]'`
+- 调 auto-layout 尺寸模式（HUG / FILL / FIXED）→ `figma-cli sizing <nodeId>`
+- Pin 到父边（stretch-x / scale-y 等）→ `figma-cli pin <edge> <nodeId>`
+- 设 padding / gap / align → `figma-cli padding <nodeId> ...` / `figma-cli gap <nodeId> <value>` / `figma-cli align <nodeId> <value>`
+
+`eval` / `script` 只在 CLI 没有对应能力时才用，比如 Plugin API 专属操作、批量读多个节点的私有字段、或修改既有节点的非标属性。
+
 ## 5. NodeId 纪律
 
 - 不要凭记忆推断 NodeId。
