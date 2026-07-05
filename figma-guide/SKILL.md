@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 5.1
+version: 5.2
 ---
 
 ## 触发条件
