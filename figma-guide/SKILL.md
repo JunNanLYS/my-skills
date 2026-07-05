@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 5.0
+version: 5.1
 ---
 
 ## 触发条件
@@ -14,7 +14,7 @@ version: 5.0
 
 ## 规范前置摘要
 
-执行任何 Figma 任务前，先记住这 13 条：
+执行任何 Figma 任务前，先记住这 14 条：
 
 1. **统一使用同一个 CLI**：默认使用 `silships/figma-cli` 2.x，对外命令优先写 `figma-cli`。
 2. **统一遵循当前 CLI 语法**：命令形态以 `figma-cli --help` 和对应子命令 help 为准，不混用其他历史文档里的写法。
@@ -29,6 +29,7 @@ version: 5.0
 11. **改父框时先判断是否真的需要离线审计**：优先使用 `figma-cli` 原生命令做布局与约束调整；只有怀疑父子越界、裁切或局部坐标异常时，再跑 `figma-validate-bounds.mjs` 做基线检查。
 12. **导出图优先走 CLI 原生命令并实际看图**：优先用 `figma-cli verify --save` 或 `figma-cli export ... -o ...` 落 PNG，再打开截图检查文字、颜色、遮挡和对齐。
 13. **终验收必须截图 + 归档**：每次交付前必须实际看图，并把验收截图统一保存到 `<当前项目根>/temp/figma-screeshot/`，命名带页面或功能语义。
+14. **高频节点缓存**：只读查询（`find` / `spec` / `instantiate` / `var list`）前，先看 `<当前项目根>/.figma/cache.json` 是否命中（按 `fileKey` 命名空间、TTL 3 天）；命中后必须二次确认 id/名称/类型一致再用；**写入路径绝不读缓存**，setter 必须基于重读。判定标准、TTL、二次确认、dirty、黑名单见 `references/workflow.md` §5.5。
 
 ## CLI-only 主路径
 
@@ -82,7 +83,7 @@ CLI 入口已经统一，但设计执行纪律不变：
 - 改父框尺寸时，优先用 CLI 的布局、pin、sizing、inspect 等原生命令处理；只有怀疑存在越界、裁切或局部坐标异常时，才运行 `figma-validate-bounds.mjs` 做离线审计。
 - 导出图后必须写盘并 Read，不能只看“导出成功”。优先使用 `figma-cli verify --save` 或 `figma-cli export ... -o ...`。
 
-复用模式、组件页纪律、Section 模式、批量/串行规则见 `references/workflow.md`。
+复用模式、组件页纪律、Section 模式、批量/串行规则、高频节点缓存口径见 `references/workflow.md`。
 验证口径见 `references/validation.md`。
 本地辅助脚本参数见 `references/scripts.md`。
 
@@ -91,7 +92,7 @@ CLI 入口已经统一，但设计执行纪律不变：
 - `references/cli.md`
   - 何时看：需要确认仓库地址、安装/更新方式、Yolo 连接方式、或者想知道如何向 CLI 自查命令时。
 - `references/workflow.md`
-  - 何时看：需要处理组件页、结构复用、坐标放置、NodeId、Section、批量操作时。
+  - 何时看：需要处理组件页、结构复用、坐标放置、NodeId、Section、批量操作，或需要高频节点缓存口径（§5.5）时。
 - `references/validation.md`
   - 何时看：需要做导出验收、截图核对、父框 resize、自检收尾时。
 - `references/scripts.md`
