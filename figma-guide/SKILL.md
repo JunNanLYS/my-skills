@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 8.0
+version: 8.1
 ---
 
 ## 触发条件
@@ -80,6 +80,41 @@ version: 8.0
 | 撤销上一步 | `figma-cli undo` |
 | 不知道命令怎么写 | `figma-cli --help` → `figma-cli <command> --help` |
 
+## 复用节点典型场景与策略
+
+拿到一个"页面里要画很多看起来差不多的元素"的请求时，先选场景，再选命令，不要直接埋头画。
+
+### 场景对照表
+
+| 场景 | 典型例子 | 推荐路径 |
+|---|---|---|
+| 跨页 / 跨文件复用 | 全局 NavBar、Sidebar、TabBar、Footer | 组件页定义 Component（或 Component Set）→ UI 页 `instantiate` |
+| 多状态变体 | 按钮的 default / hover / disabled、Tag 的已选 / 未选 | 组件页定义 Component Set（按 spec 生成）→ `instantiate` 切变体 |
+| 本页面内大量同类卡片 / 列表项 | 新闻 feed、商品列表、表格行 | 先做一个 → `clone` N 份 → `set` / `text` 改每份内容 |
+| 本页面 N 份结构和样式完全一致 | 装饰占位、图标的并排展示 | `render-batch` 一次建 N 份 |
+| 已有 Component 但要保留微调 | 局部改尺寸 / 改图 / 改文案 | 走 INSTANCE 的 exposed properties；超出范围时改源 Component |
+
+### 决策流程（页面内重复内容）
+
+```text
+这个元素只在本页面用还是要多页用？
+  ├── 多页用 / 有多状态 / 后续会改版 → 升 Component（必要时 Component Set）
+  └── 仅本页面用
+        ├── 每份都可能要单独微调 → 做一个 → clone N 份 → set 改内容
+        └── 每份结构样式完全一致 → render-batch 一次性建
+```
+
+### 绝对禁止
+
+- 在 UI 页里直接定义通用组件（违反 §7）。
+- 把 N 张同类卡片塞进一个 wrapper Frame 再 `node to-component`（违反 §8）。
+- 凭记忆重画已有结构而不先 `spec` / `find`。
+- clone 后凭旧 NodeId 继续写——必须先重读再写（违反 §10）。
+
+### 完整决策依据与常见错误
+
+本表只是入口级速查；详细的卡片复用工作流（clone → set 改内容）、升 Component 的触发条件、5 条常见错误、与 NodeId / 截图纪律的关系，见 `references/workflow.md` §11。
+
 ## CLI-only 主路径
 
 **核心纪律：CLI 有对应功能就直接用，没有的才写 `eval` / `script` 代码。** 不要因为一时找不到命令就回退到手动 Plugin API 调用——`figma-cli --help` 永远先查。
@@ -137,6 +172,8 @@ CLI 入口已经统一，但设计执行纪律不变：
 复用模式、组件页纪律、Section 模式、批量/串行规则、页面内重复卡片复用决策（§11）、高频节点缓存口径见 `references/workflow.md`。
 验证口径见 `references/validation.md`。
 本地辅助脚本参数见 `references/scripts.md`。
+
+> 速查：复用节点典型场景与对应策略见上一节"复用节点典型场景与策略"。
 
 ## 文档索引
 
