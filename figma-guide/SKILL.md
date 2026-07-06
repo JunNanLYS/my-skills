@@ -3,7 +3,7 @@ name: figma-guide
 model: sonnet
 category: design
 description: Figma CLI 优先的设计执行指南——统一使用 silships/figma-cli 2.x（`figma-cli` / `figma-ds-cli`），聚焦组件复用、局部坐标与 NodeId 纪律、截图验证，以及 `figma-validate-bounds` 这个离线越界审计脚本。触发条件：消息包含 Figma / figma / figma-cli / NodeId 任一词时加载；避免被泛用动词误触发。
-version: 8.1
+version: 8.2
 ---
 
 ## 触发条件
@@ -11,6 +11,15 @@ version: 8.1
 仅当用户消息**包含 `Figma` / `figma` / `figma-cli` / `NodeId` 任一词**（中英文不限）时执行本 Skill。
 
 如果消息里没有这些词，即使涉及 UI / 颜色 / 组件，也**跳过**本 Skill —— 那通常是代码任务（Vue / React / Tailwind 等）。
+
+## 首次启动必做
+
+每次新会话 / 新终端第一次跑 Figma 任务前，先按顺序执行：
+
+1. `figma-cli connect` —— 连接 Figma（默认 Yolo 模式）。
+2. `figma-cli status` —— 确认连接状态、daemon 是否可用。
+
+只有这两步都通过后，再进入下面的"规范前置摘要"和具体任务。如果 `status` 报 daemon 未运行，再查 `figma-cli daemon --help`；需要回滚 Yolo patch 用 `figma-cli unpatch`。详细连接说明见下文 §2。
 
 ## 规范前置摘要
 
