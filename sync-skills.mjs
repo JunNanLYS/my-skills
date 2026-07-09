@@ -28,6 +28,7 @@ function parseArgs(argv) {
     help: false,
     failFast: false,
     onlyChanged: false,
+    prune: true,
   };
 
   for (const arg of argv) {
@@ -37,6 +38,7 @@ function parseArgs(argv) {
     else if (arg === "--help" || arg === "-h") options.help = true;
     else if (arg === "--fail-fast") options.failFast = true;
     else if (arg === "--only-changed") options.onlyChanged = true;
+    else if (arg === "--no-prune") options.prune = false;
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
@@ -44,7 +46,7 @@ function parseArgs(argv) {
 }
 
 function printUsage() {
-  console.log(`Usage: node sync-skills.mjs [--dry-run] [--include-hidden] [--verbose] [--only-changed] [--fail-fast]
+  console.log(`Usage: node sync-skills.mjs [--dry-run] [--include-hidden] [--verbose] [--only-changed] [--no-prune] [--fail-fast]
 
 Synchronizes every top-level skill directory that contains a SKILL.md file into:
   - ~/.claude/skills
@@ -53,11 +55,14 @@ Synchronizes every top-level skill directory that contains a SKILL.md file into:
 Options:
   --dry-run        Show what would be synchronized without changing files
   --include-hidden Include top-level directories that start with a dot
-  --verbose, -v    Print one line per skill copy or skip
+  --verbose, -v    Print one line per skill copy, skip, or prune
   --only-changed   Skip skills whose source and destination fingerprints match
+  --no-prune       Do not remove destination directories that no longer have a source
   --fail-fast      Stop on the first copy failure
 
-Same-named destinations are overwritten via a safe temporary replacement.`);
+Same-named destinations are overwritten via a safe temporary replacement.
+Destination directories that are themselves skills (have a SKILL.md) but have no
+matching source are deleted, mirroring a removed source skill on disk.`);
 }
 
 function isSkillDirectory(entryName) {
@@ -182,21 +187,96 @@ function syncSkillDirectory(skillName, targetRoot, options) {
   return { status: "synced", skillName, targetRoot };
 }
 
+function listTargetSkillDirectories(targetRoot, includeHidden) {
+  if (!existsSync(targetRoot)) {
+    return [];
+  }
+
+  return readdirSync(targetRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => includeHidden || !name.startsWith("."))
+    .filter((name) => existsSync(join(targetRoot, name, "SKILL.md")))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function pruneStaleSkillDirectory(targetPath, dryRun) {
+  if (dryRun) {
+    return;
+  }
+  rmSync(targetPath, { recursive: true, force: true });
+}
+
+function pruneStaleSkillDirectories(skillNames, targetRoot, options) {
+  if (!options.prune) {
+    return [];
+  }
+
+  const targetSkills = listTargetSkillDirectories(targetRoot, options.includeHidden);
+  const sourceNames = new Set(skillNames);
+  const results = [];
+
+  for (const targetSkill of targetSkills) {
+    if (sourceNames.has(targetSkill)) {
+      continue;
+    }
+
+    const targetPath = join(targetRoot, targetSkill);
+
+    if (options.verbose || options.dryRun) {
+      console.log(`${options.dryRun ? "[dry-run-prune]" : "[prune]"} ${targetPath} (no matching source)`);
+    }
+
+    if (options.dryRun) {
+      results.push({ status: "planned-prune", skillName: targetSkill, targetRoot });
+      continue;
+    }
+
+    try {
+      pruneStaleSkillDirectory(targetPath, options.dryRun);
+      results.push({ status: "pruned", skillName: targetSkill, targetRoot });
+    } catch (error) {
+      results.push({ status: "failed", skillName: targetSkill, targetRoot, error });
+      console.error(`[error] ${targetPath}: ${error.message}`);
+    }
+  }
+
+  return results;
+}
+
 function summarizeResults(results, dryRun) {
   const summary = {
     synced: 0,
     skipped: 0,
     planned: 0,
+    pruned: 0,
+    plannedPrune: 0,
     failed: 0,
   };
 
   for (const result of results) {
-    summary[result.status] += 1;
+    if (result.status === "planned-prune") {
+      summary.plannedPrune += 1;
+    } else if (result.status === "pruned") {
+      summary.pruned += 1;
+    } else {
+      summary[result.status] += 1;
+    }
   }
 
   const parts = dryRun
-    ? [`planned ${summary.planned}`, `skipped ${summary.skipped}`, `failed ${summary.failed}`]
-    : [`synced ${summary.synced}`, `skipped ${summary.skipped}`, `failed ${summary.failed}`];
+    ? [
+        `planned ${summary.planned}`,
+        `planned-prune ${summary.plannedPrune}`,
+        `skipped ${summary.skipped}`,
+        `failed ${summary.failed}`,
+      ]
+    : [
+        `synced ${summary.synced}`,
+        `pruned ${summary.pruned}`,
+        `skipped ${summary.skipped}`,
+        `failed ${summary.failed}`,
+      ];
 
   return parts.join(", ");
 }
@@ -238,6 +318,15 @@ function run() {
           console.log(`${options.dryRun ? "Dry run" : "Sync"} completed: ${summarizeResults(results, options.dryRun)}`);
           return 1;
         }
+      }
+    }
+
+    for (const pruneResult of pruneStaleSkillDirectories(skillDirectories, targetRoot, options)) {
+      results.push(pruneResult);
+      if (pruneResult.status === "failed" && options.failFast) {
+        console.error(`Stopped early because --fail-fast is enabled.`);
+        console.log(`${options.dryRun ? "Dry run" : "Sync"} completed: ${summarizeResults(results, options.dryRun)}`);
+        return 1;
       }
     }
   }
