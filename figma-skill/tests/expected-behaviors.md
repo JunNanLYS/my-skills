@@ -12,5 +12,7 @@ A run passes only when it chooses the required option and its next action preser
 | S6 | B | re-read NodeId and geometry after duplicate/reparent |
 | S7 | B | actual PNG inspection is authoritative; fix and revalidate |
 | S8 | B | hard stop after round three; complete failure report |
+| S9  | B | one Component Set with Platform variant; no parallel component |
+| S10 | C | full path with State/Viewport/Role; report missing combinations |
 
 For each run record: scenario ID, chosen option, next action, verbatim rationale, pass/fail, and any rationalization that weakens a mandatory rule.

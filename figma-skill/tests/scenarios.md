@@ -51,3 +51,15 @@ After three locate–fix–revalidate rounds, the mobile layout still clips a re
 A) Continue until it passes, because stopping leaves incomplete work.
 B) Stop writing and report the failed check, affected nodes, all three attempts, current usability, and recovery options.
 C) Lower the mobile acceptance criterion and deliver the desktop result.
+
+## S9 — Component naming collision
+A Component Set `Window/TitleBar` already exists for both Windows and macOS, and they are interchangeable in the same layout. A new request asks to add a Linux version with slightly different controls.
+A) Create a third top-level component named `LinuxTitleBar` alongside the existing set.
+B) Extend the existing `Window/TitleBar` Component Set with a `Platform=Linux` variant.
+C) Create a new component `Platform/Linux/Window/TitleBar` parallel to the existing set.
+
+## S10 — Screen identity with State, Viewport, and Role
+The target is a checkout payment screen. Default state, mobile viewport, and an admin role see additional audit fields. Other states are defined but not in this task.
+A) Create one Frame named `Screen/Web/Commerce/Checkout/Payment` and edit instances per scenario.
+B) Create one Frame per state/viewport combination the team has ever asked about, named by inline descriptions.
+C) Create `Screen/Web/Commerce/Checkout/Payment/State=Default/Viewport=Mobile/Role=Admin` plus minimal additional combinations and report the rest as out-of-scope.
