@@ -8,7 +8,7 @@
 
 ### Visual
 
-必须根据当前 `verify --save` 或 `export` 帮助把 PNG 保存到 `[当前工作区]/temp/figma-screenshot/`，使用页面或功能语义命名。必须实际打开每张最终截图，检查文字裁切、遮挡、对齐、间距、颜色、状态、圆角和层级。退出码 0 和导出成功禁止代替看图。
+必须根据当前 `verify --save` 或 `export` 帮助把 PNG 保存到 `[Current workspace]/temp/figma-screenshot/`，使用页面或功能语义命名。必须实际打开每张最终截图，检查文字裁切、遮挡、对齐、间距、颜色、状态、圆角和层级。退出码 0 和导出成功禁止代替看图。
 
 ### Design System
 

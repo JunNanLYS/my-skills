@@ -15,7 +15,7 @@ version: 1.0
 - 所有 Figma 读取、创建、修改、导出和验证必须使用 `figma-cli`。
 - 禁止使用 Figma MCP、其他 Figma CLI 或 GUI 自动化作为替代路径。
 - 每个新会话首次执行 Figma 任务时，必须先运行 `figma-cli connect`，再运行 `figma-cli status`。
-- `[当前工作区]/docs/FIGMA_DESIGN_SYSTEM.md` 是唯一设计规范来源。
+- `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md` 是唯一设计规范来源。
 - 设计系统审批与 Figma 首次写入审批是两次独立审批；前者禁止被解释为后者。
 - 只有当前 CLI 顶层帮助和最接近意图的子命令帮助都证明缺少原生能力，并且用户批准该精确降级时，才允许使用 `eval/run`。
 - duplicate、reparent、unwrap、组件化、组合 variants、删除重建或大幅层级调整后，必须重新读取 NodeId 和当前几何。

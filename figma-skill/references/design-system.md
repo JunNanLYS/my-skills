@@ -4,7 +4,7 @@
 
 当前工作区是用户启动 Claude Code 或 Codex 时选择并授权的目录。命令目录变化和父级 `.git` 禁止重新定义它。
 
-唯一规范来源固定为 `[当前工作区]/docs/FIGMA_DESIGN_SYSTEM.md`。
+唯一规范来源固定为 `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`。
 
 ## Required Coverage
 
