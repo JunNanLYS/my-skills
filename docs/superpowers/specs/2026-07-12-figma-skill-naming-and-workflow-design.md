@@ -948,11 +948,14 @@ The skill's reference files and their workflow mappings:
 | `installation.md`               | 1                        |
 | `design-system.md`              | 2, 4G                    |
 | `discovery-and-planning.md`     | 3, 4, 4A–4H, 5, 6        |
-| `naming.md` (new)               | 4, 5, 4C                 |
 | `execution.md`                  | 6, 7, 8                  |
 | `validation.md`                 | 9, 10, 11                |
 
-`naming.md` must contain the complete naming grammar (Sections 1–5 of this spec) and the collision resolution rule.
+The full naming grammar (Sections 1–5 of this spec) lives directly in
+`SKILL.md` — there is no separate `references/naming.md`. `SKILL.md` must
+include the entire naming grammar so it can be read without context
+switching, and each section of the naming grammar must be paired with the
+workflow that consumes it (Workflow 4 and Workflow 5).
 
 ## 9. Red Flags — Stop
 
@@ -974,7 +977,7 @@ All Workflows 0–11 must complete with `PASS`. Any `FAIL` or `STOP` requires a 
 - All task-entry subworkflows 4A–4H referenced from a single decision point.
 - All forbidden patterns enumerated with explicit "do not" examples.
 - All Mermaid graphs present, correct, and self-contained.
-- All three reference file mappings (including new `naming.md`) listed.
+- All reference file mappings listed; naming grammar lives inside `SKILL.md`, not in a separate `references/naming.md`.
 - All cross-references to the base spec preserved (approval gates, environment rules, etc.).
 - Version target for the skill is `1.1` (minor bump from `1.0`).
 
