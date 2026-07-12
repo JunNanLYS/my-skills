@@ -65,4 +65,103 @@ for (const [scenario, patterns] of Object.entries(scenarioCoverage)) {
   }
 }
 
-console.log("PASS: figma-skill structure, wording, and S1-S8 rule coverage");
+function assertNamingAndWorkflow(skill, runtimeMarkdown) {
+  // Naming grammar markers (Sections 1-5 of the spec).
+  for (const phrase of [
+    /<Category>\/<Domain>\/<Component>\[?\/<Part>\.\.\.\]?\/?/,
+    "Screen/<Platform>/<Domain>/<Flow>/<View>",
+    "State=<State>",
+    "Viewport=<Viewport>",
+    "Role=<Role>",
+    "Specimen/StateGallery",
+    "Specimen/VariantMatrix",
+    "Specimen/Properties",
+    "Specimen/Usage",
+    "Foundation",
+    "Primitive",
+    "Action",
+    "Input",
+    "Navigation",
+    "DataDisplay",
+    "Feedback",
+    "Overlay",
+    "Layout",
+    "Content",
+    "Internal",
+    "Deprecated",
+    "Variant",
+    "Platform",
+    "Size",
+    "State",
+    "Validation",
+    "Selection",
+    "Orientation",
+    "Density",
+    "Expanded",
+    "Loading",
+    "True",
+    "False",
+    "01 Library",
+    "02 Screens",
+    "03 Flows",
+    "00 Foundations",
+    "10 Components",
+    "80 Internal",
+    "90 Deprecated",
+  ]) {
+    if (phrase instanceof RegExp) {
+      assert.match(skill, phrase, `naming marker missing: ${phrase}`);
+    } else {
+      assert.ok(skill.includes(phrase), `naming marker missing: ${phrase}`);
+    }
+  }
+
+  // Workflow 0-11 markers.
+  for (const workflow of [
+    "Workflow 0",
+    "Workflow 1",
+    "Workflow 2",
+    "Workflow 3",
+    "Workflow 4",
+    "Workflow 4A",
+    "Workflow 4B",
+    "Workflow 4C",
+    "Workflow 4D",
+    "Workflow 4E",
+    "Workflow 4F",
+    "Workflow 4G",
+    "Workflow 4H",
+    "Workflow 5",
+    "Workflow 6",
+    "Workflow 7",
+    "Workflow 8",
+    "Workflow 9",
+    "Workflow 10",
+    "Workflow 11",
+  ]) {
+    assert.ok(skill.includes(workflow), `workflow marker missing: ${workflow}`);
+  }
+
+  // Five required Mermaid graphs.
+  for (const graph of [
+    "Total Workflow Graph",
+    "Task Entry and Reuse Graph",
+    "Single-Direction Dependency Graph",
+    "Validation Order Graph",
+    "Page Architecture Graph",
+  ]) {
+    assert.ok(skill.includes(graph), `graph heading missing: ${graph}`);
+  }
+
+  // Forbidden-word negatives (re-asserted to catch regressions).
+  for (const bad of ["Common", "General", "Misc", "Other"]) {
+    const re = new RegExp(`^\\s*-\\s*${bad}\\s*$`, "m");
+    assert.ok(!skill.match(re), `forbidden bucket listed as a category: ${bad}`);
+  }
+
+  assert.doesNotMatch(skill, /find the master by instance name/);
+  assert.match(skill, /Workflow 0/);
+}
+
+assertNamingAndWorkflow(skill, runtimeMarkdown);
+console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, and naming + workflow markers");
