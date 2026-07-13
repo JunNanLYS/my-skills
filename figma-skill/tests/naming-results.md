@@ -1,5 +1,31 @@
 # Naming and Workflow Coverage
 
+## v1.2 Geometry & Placement Mandates Traceability
+
+| Spec section                                     | Implemented at                  | Marker                                                                 |
+|--------------------------------------------------|---------------------------------|------------------------------------------------------------------------|
+| Section 3 — Visual-Overlap Rules                 | figma-skill/SKILL.md:223        | Workflow 4A overlap sub-steps                                          |
+| Section 3 — Screen placement                     | figma-skill/SKILL.md:243        | Workflow 4D overlap sub-steps                                          |
+| Section 3 — Flow connector placement             | figma-skill/SKILL.md:258        | Workflow 4F magnet-from-geometry                                       |
+| Section 4 — Geometry Family A (Auto Layout)      | figma-skill/SKILL.md:534        | `### Auto Layout Mode Selection`                                       |
+| Section 4 — Geometry Family B (Fixed Parent)     | figma-skill/SKILL.md:540        | `### Fixed Parent Clipping`                                            |
+| Section 4 — Geometry Family C (Variant Baseline) | figma-skill/SKILL.md:546        | `### Component Set Variant Baseline`                                   |
+| Section 5 — Mandatory Lookups by Phase           | figma-skill/SKILL.md:186        | `## Mandatory Lookups by Phase`                                        |
+| Section 5.2 — NNR rule for Lookups               | figma-skill/SKILL.md:24         | `## Non-Negotiable Rules` 10th bullet                                  |
+| Section 6.5 — Workflow 6 fields                  | figma-skill/SKILL.md:280        | `PlacementAudit` / `GeometryAudit` / `OverlapCheck` / `GeometryReaudit`|
+| Section 6.6 — Workflow 7 Geometry baseline        | figma-skill/SKILL.md:318        | `Geometry:` block                                                      |
+| Section 6.7 — Workflow 8 batch check             | figma-skill/SKILL.md:336        | `命名、NodeId、hierarchy、geometry` clause in check step                |
+| Section 6.8 — Workflow 9 Geometry layer           | figma-skill/SKILL.md:340        | `Naming → Structure → Geometry → Visual → DesignSystem → Flow`          |
+| Section 6.9 — Workflow 11 delivery report        | figma-skill/SKILL.md:359        | `Geometry:` / `OverlapMatrix:` / `VariantRowParity:`                   |
+| Section 7 — Component Geometry Mandates          | figma-skill/SKILL.md:534        | `## Component Geometry Mandates`                                       |
+| Section 8 — Six New Red Flags                    | figma-skill/SKILL.md:572-577    | last six bullets in `## Red Flags — Stop`                              |
+| Section 9.1 — execution.md Geometry-aware         | figma-skill/references/execution.md | `## Geometry-aware Commands`                                       |
+| Section 9.2 — validation.md Geometry Validation  | figma-skill/references/validation.md | `## Geometry Validation Checklist`                                  |
+| Section 10.1 — S11/S12/S13                       | figma-skill/tests/scenarios.md:67+ | three new pressure scenarios                                         |
+| Section 10.1 — Expected behaviors                 | figma-skill/tests/expected-behaviors.md | rows S11/S12/S13                                              |
+| Section 10.2 — validate-skill.mjs v1.2 asserts    | figma-skill/tests/validate-skill.mjs:165+ | `assertGeometryAndLookups`                                       |
+| Section 10.3 — naming-and-workflow.test.mjs v1.2  | figma-skill/tests/naming-and-workflow.test.mjs:108+ | three new tests                                            |
+
 ## Deterministic Tests
 
 | Test                                                                                  | Purpose                                       | Status |
@@ -69,9 +95,14 @@
 | S1–S8                                               | B      | `validate-skill.mjs` S1–S8 markers                                              |
 | S9 — Component naming collision                     | B      | `naming-and-workflow.test.mjs` Variant axes + `### Collision Resolution`      |
 | S10 — Screen identity with State/Viewport/Role      | C      | `naming-and-workflow.test.mjs` Screen path markers + `### Screen Path`        |
+| S11 — Visual overlap on create                      | B      | `naming-and-workflow.test.mjs` overlap keywords + `### Auto Layout Mode Selection` |
+| S12 — Auto Layout overflow                          | B      | `naming-and-workflow.test.mjs` geometry families test                          |
+| S13 — Component Set variant baseline divergence     | B      | `naming-and-workflow.test.mjs` variant parity test                            |
 
 ## Spec Resolution Notes
 
 - No `references/naming.md` was created; the spec revision folded naming grammar into `SKILL.md`.
 - Existing reference files (`installation.md`, `design-system.md`, `discovery-and-planning.md`, `execution.md`, `validation.md`) are unchanged in this upgrade.
 - The five new Red Flags from spec Section 9 are listed in `SKILL.md` `## Red Flags — Stop` at line 462.
+- v1.2: SKILL.md grew from 494 to 598 lines (+104). Adding `## Mandatory Lookups by Phase`, expanding Workflows 4A/4D/4F/6/7/8/9/11, and inserting `## Component Geometry Mandates` produced the change. References remain minimal-only.
+- v1.2: Tests grew from 7 → 10 in `naming-and-workflow.test.mjs`; validator adds `assertGeometryAndLookups`.

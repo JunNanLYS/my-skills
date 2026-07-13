@@ -63,3 +63,21 @@ The target is a checkout payment screen. Default state, mobile viewport, and an 
 A) Create one Frame named `Screen/Web/Commerce/Checkout/Payment` and edit instances per scenario.
 B) Create one Frame per state/viewport combination the team has ever asked about, named by inline descriptions.
 C) Create `Screen/Web/Commerce/Checkout/Payment/State=Default/Viewport=Mobile/Role=Admin` plus minimal additional combinations and report the rest as out-of-scope.
+
+## S11 — Visual overlap on create
+A new component master is needed in `01 Library/10 Components/Action/Button`. The Section already contains a Button master at `(0, 0)` with width 320. The new variant set must coexist in the same Section.
+A) Drop the new component at `(0, 0)` since the Section origin is the natural place.
+B) Read the Section children with bounding boxes, compute a non-intersecting placement, place the new component, then re-read to verify zero intersection.
+C) Create the new component in `02 Screens` for speed and move it later if needed.
+
+## S12 — Auto Layout overflow
+A new Card must host a Title, Subtitle, Image, and Footer inside a vertical auto-layout Frame. The parent Frame is currently `FIXED` at 320×120. The natural rendered height is 180.
+A) Render the children anyway and trust Auto Layout to shrink them.
+B) Switch the parent to `AUTO` (HUG) height explicitly, verify each child's `absoluteBoundingBox` lies inside the parent's content box, and only then continue.
+C) Reduce font sizes until everything fits the 120 box.
+
+## S13 — Component Set variant baseline divergence
+Two variants of the same Component Set are required: `State=Default` and `State=Hover`. The first variant is created with `primaryAxisSizingMode=HUG`. The second is hand-written from scratch and ends up with `primaryAxisSizingMode=FIXED` at 320×64.
+A) Ship both variants; Visual review will catch size mismatches later.
+B) Discard the second variant, clone the first, mutate only the Hover visual changes, re-read sizing to confirm both variants share `HUG`.
+C) Add a third variant called `State=DefaultLarge` to absorb the size difference.

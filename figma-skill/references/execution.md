@@ -27,6 +27,11 @@
 
 当前复制命令是 `duplicate|dup`，禁止使用过期拼写。
 
+## Geometry-aware Commands
+
+- 必须使用 silships/figma-cli 当前帮助确认 geometry-affecting 命令集合（sizing、pin、padding、gap、align、auto-layout 等）当前是否原生可用。被合并或拆分的命令以最新帮助为准。
+- `duplicate|dup` 会改变父级 NodeId 与 bounding box，必须 Workflow 8 重读。
+
 ## Small-Batch Loop
 
 每批固定执行：

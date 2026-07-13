@@ -3,7 +3,7 @@ name: figma-skill
 model: sonnet
 category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 1.1
+version: 1.2
 ---
 
 # Figma End-to-End Execution
@@ -22,6 +22,7 @@ version: 1.1
 - 首版禁止创建跨任务持久缓存。任务内上下文禁止替代写入前实时读取。
 - 验证失败最多自动修正三轮（≤3）；仍失败必须停止写入并完整报告。
 - 硬性要求必须用「必须」「禁止」「只有……才允许」；禁止用弱措辞稀释门禁。
+- 每个 Workflow 阶段开始时必须先加载规定的 reference，证据是相关命令的 `--help` 或同义查询文本与 reference 章节至少各出现一次。缺少证据视为该阶段 `Gate=FAIL` 并禁止进入下一阶段。
 
 ## Naming Grammar
 
@@ -182,6 +183,21 @@ Validation=SelectedErrorDisabled
 
 设计系统确定后，必须提交目标范围、复用/创建策略、组件与变量改动、布局与响应式方案、冲突修正范围、基线与批次、`eval/run` 证据、验证标准，并等待明确批准。结构、规范、范围、共享组件或降级方式实质变化时，必须重新审批。
 
+## Mandatory Lookups by Phase
+
+在每个阶段必须加载对应 reference，缺失即停止或拒绝写：
+
+- Workflow 1（环境 / 安装 / 连接）        → 必须加载 references/installation.md
+- Workflow 2 / 4G（设计系统）              → 必须加载 references/design-system.md
+- Workflow 3 / 4 / 4A–4H / 5 / 6（发现与方案）→ 必须加载 references/discovery-and-planning.md
+- Workflow 6 / 7 / 8（写入与执行）         → 必须加载 references/execution.md
+- Workflow 9 / 10 / 11（验证 / 修正 / 交付）→ 必须加载 references/validation.md
+
+禁止：用 SKILL.md 替代以上任何一次加载。
+禁止：跳到 Workflow 7 之前仍未加载 references/execution.md。
+禁止：跳到 Workflow 9 之前仍未加载 references/validation.md。
+禁止：把"读 SKILL.md 已够"作为不进 reference 的理由。
+
 ## Workflows 0–11
 
 ### Workflow 0 — Task Classification
@@ -208,6 +224,14 @@ Validation=SelectedErrorDisabled
 
 固定动作：在 `01 Library` 中只读检查是否已有匹配组件；不存在则按 Category 创建 Section；创建主组件或 Component Set；补齐 Variant Property；添加四个 Specimen。完成条件：组件和 Specimen 已就位。下一状态：Workflow 5。
 
+几何与位置硬性附加动作：
+
+1. 必须读取目标 Section 的 children 并取得每个邻居节点的 `id`、`name`、`type`、`absoluteBoundingBox`。
+2. 必须计算 Section 内空闲放置矩形。
+3. 必须从空闲矩形中挑选新节点的 `(x, y)`；非空 Section 禁止把 `(0, 0)` 作为默认起点，禁止沿用上次会话残留坐标。
+4. 写入后必须重读父级 children 与新节点的 `absoluteBoundingBox`，与所有邻居做相交矩阵，0 相交才能进入下一批。
+5. 与邻居相交时视为 Workflow 10 失败，按 ≤3 修正循环处理。
+
 ### Workflow 4B — Modify Component
 
 固定动作：通过 `spec` 读取完整定义；列出 specimens、Screen 实例、文档引用；估算影响半径。完成条件：影响半径已记录。下一状态：Workflow 5。
@@ -220,6 +244,13 @@ Validation=SelectedErrorDisabled
 
 固定动作：复核 `01 Library` 是否已有所需组件；缺失则先在 Library 创建再返回；在 `02 Screens` 定位 Section；创建 Screen Frame；实例化所需组件；禁止在 Screen 中另存变体组件。完成条件：Screen 已创建并仅消费 Library 组件。下一状态：Workflow 5。
 
+几何与位置硬性附加动作：
+
+1. 必须读取目标 Domain/Flow Section 当前所有 Frames 的 `absoluteBoundingBox`。
+2. 新 Screen Frame 的 `(x, y)` 必须落在非相交矩形内，禁止与非空 Section 默认 `(0, 0)`。
+3. 如果用户明确请求视觉重叠（例如层级对比），必须在 Workflow 6 计划的 `OutOfScopeIssues` 中显式记录后再提交审批。
+4. 写入后必须重读父级 children 与新 Screen 的 `absoluteBoundingBox`，与所有邻居 Frame 做相交矩阵，0 相交才能进入下一批。
+
 ### Workflow 4E — Modify Screen
 
 固定动作：定位 Screen；列出每个组件实例的来源；判断是组件级改动（→ 4B）还是内容级改动。完成条件：来源分类已记录。下一状态：Workflow 5 或 Workflow 4B。
@@ -227,6 +258,12 @@ Validation=SelectedErrorDisabled
 ### Workflow 4F — Create Flow
 
 固定动作：复核 `02 Screens` 齐备；复用 Screen Frame；在 `03 Flows` 摆放或连线；禁止在 Flows 重新设计 Screen 源。完成条件：Flow 已创建。下一状态：Workflow 5。
+
+几何与位置硬性附加动作：
+
+1. 必须读取源 Screen 与目标 Screen 的 `absoluteBoundingBox`，禁止凭记忆决定 connector endpoint magnet。
+2. magnet 必须基于实际几何选择（MIN/CENTER/MAX 或 AUTO）。
+3. 写入后必须重读 connector 节点与两个端点的 `nodeId`、`absoluteBoundingBox`、magnet；端点不在源/目标 Screen 几何范围内视为失败。
 
 ### Workflow 4G — Create Foundation
 
@@ -264,24 +301,56 @@ NamingMigration:
 AffectedDependencies:
 OutOfScopeIssues:
 CommandPlan:
+PlacementAudit:
+GeometryAudit:
+OverlapCheck:
 EvalRunFallback:
 BaselinePlan:
 ValidationPlan:
 ```
 
-`EvalRunFallback` 必须包含 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`。完成条件：获得用户明确批准。下一状态：批准 → 7；拒绝 → 回到 4；范围实质变化 → 重新审批。
+`PlacementAudit` 必须包含用于验证零相交所用的命令、邻居列表、期望零相交说明。`GeometryAudit` 必须列出 mode / sizing / 变体行矩阵。`OverlapCheck` 必须输出每个节点的相交矩阵。
+
+`EvalRunFallback` 必须包含 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit: True | False`。第六条事实：写入后必须重读几何，即使用 `eval/run` 也禁止跳过。
+
+完成条件：获得用户明确批准。下一状态：批准 → 7；拒绝 → 回到 4；范围实质变化 → 重新审批。
 
 ### Workflow 7 — Baseline Capture
 
-记录目标及直接依赖的 NodeId、name、type、parent、位置与尺寸、Auto Layout、约束、绑定、reuse handles、基线截图。重命名任务还需记录旧名称、新名称、已有实例、文档引用、替换路径。完成条件：`BaselineGate=PASS`。下一状态：Workflow 8。
+记录目标及直接依赖的 NodeId、name、type、parent、位置与尺寸、Auto Layout、约束、绑定、reuse handles、基线截图。重命名任务还需记录旧名称、新名称、已有实例、文档引用、替换路径。
+
+每个目标节点还必须额外记录几何 baseline：
+
+```text
+Geometry:
+  LayoutMode: NONE | HORIZONTAL | VERTICAL
+  PrimaryAxisSizing: FIXED | AUTO
+  CounterAxisSizing: FIXED | AUTO
+  Constraints: H=<MIN|CENTER|MAX|STRETCH|SCALE> V=<...>
+  TextAutoResize: NONE | HEIGHT | WIDTH_AND_HEIGHT | TRUNCATE
+NeighborsInParent: <id, box>
+```
+
+完成条件：`BaselineGate=PASS`。下一状态：Workflow 8。
 
 ### Workflow 8 — Fixed-Order Execution
 
-固定依赖顺序：`Foundations → Library Components → Variants/Properties → Specimens → Screens → Flows`。Screen 禁止在组件就绪前创建。每批：读 → 写 → 重读 → 检查 → 通过则下一批。结构变化后必须重读 NodeId。完成条件：所有批次 `BatchGate=PASS`。下一状态：完成 → Workflow 9；任一批次失败 → Workflow 10。
+固定依赖顺序：`Foundations → Library Components → Variants/Properties → Specimens → Screens → Flows`。Screen 禁止在组件就绪前创建。每批：读 → 写 → 重读 → 检查（names、NodeIds、hierarchy、geometry 含 Auto Layout mode / sizing 策略 / bounding box 0 相交）→ 通过则下一批。结构变化后必须重读 NodeId。完成条件：所有批次 `BatchGate=PASS`。下一状态：完成 → Workflow 9；任一批次失败 → Workflow 10。
 
 ### Workflow 9 — Fixed-Order Validation
 
-固定顺序：`Naming → Structure → Visual → DesignSystem → Flow`。Visual 必须实际打开 `<Current workspace>/temp/figma-screenshot/` 中的截图。完成条件：`ValidationGate=PASS`。下一状态：PASS → 11；FAIL → 10。
+固定顺序：`Naming → Structure → Geometry → Visual → DesignSystem → Flow`。
+
+Visual 必须实际打开 `<Current workspace>/temp/figma-screenshot/` 中的截图。
+
+Geometry 层必须执行：
+
+- 读取每个 in-scope 节点的 `layoutMode`、`primaryAxisSizingMode`、`counterAxisSizingMode`、`constraints`、`textAutoResize`。
+- 计算并输出 bounding box 相交矩阵。
+- 对每个 in-scope Component Set 列出 variant 行矩阵。
+- `GeometryValidation: PASS | FAIL` 决定是否进入 Visual。
+
+完成条件：`ValidationGate=PASS`。下一状态：PASS → 11；FAIL → 10。
 
 ### Workflow 10 — At Most Three Correction Rounds
 
@@ -304,9 +373,12 @@ OutOfScopeNamingIssues:
 Validation:
 - Naming:
 - Structure:
+- Geometry:
 - Visual:
 - DesignSystem:
 - Flow:
+- OverlapMatrix:
+- VariantRowParity:
 ScreenshotPaths:
 RemainingIssues:
 CorrectionRounds:
@@ -459,6 +531,33 @@ flowchart LR
 
 命名规则已写入 `SKILL.md` 本体，不再有独立的 `references/naming.md`。
 
+## Component Geometry Mandates
+
+### Auto Layout Mode Selection
+
+- 内容驱动 → 父级 `AUTO`（HUG）
+- 必须保留容器尺寸 → 父级 `FIXED`，且 size 显式给到能容下子项
+- 混用：父级 `FIXED`，内层 `AUTO` 时父级 size 必须显式可容纳
+
+### Fixed Parent Clipping
+
+- 非 auto-layout Frame 内子项必须显式设置 constraints
+- TextNode 必须显式设置 `textAutoResize`：HEIGHT 让其生长，NONE 仅在故意裁切时
+
+### Component Set Variant Baseline
+
+- 创建第一个 variant 时确定父级 size + Auto Layout
+- 之后每个 variant 必须 clone 第一个 variant 再修改
+- 每个 variant 的 `primaryAxisSizingMode` / `counterAxisSizingMode` 必须一致（默认全部 HUG 或全部 FIXED）
+
+### 强制语言
+
+- 必须：所有几何/布局写入前必须重读父级 children 与 bounding box
+- 必须：写入后必须验证 bounding box 与邻居 0 相交
+- 必须：Component Set 每个 variant 显式共享 size 策略
+- 禁止：沿用上次会话残留坐标
+- 禁止：把 `(0, 0)` 作为非空 Section 默认起点
+
 ## Red Flags — Stop
 
 - "MCP 已连接，先用它更快。"
@@ -473,6 +572,12 @@ flowchart LR
 - "为了整齐新增第四个 Page。"
 - "把 Screen 当成组件变体。"
 - "下一步该做什么？"——工作流已经定义下一状态。
+- "位置和上次差不多就行。"
+- "这个组件不大，肯定不裁。"
+- "变体形状应该一致。"
+- "读完 spec 就能写，几何之后再说。"
+- "引用文件太长，参考 SKILL.md 就行。"
+- "父级默认就是 HUG，不用看。"
 
 ## Rationalizations Observed in Baseline Tests
 

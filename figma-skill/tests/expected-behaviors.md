@@ -14,5 +14,8 @@ A run passes only when it chooses the required option and its next action preser
 | S8 | B | hard stop after round three; complete failure report |
 | S9  | B | one Component Set with Platform variant; no parallel component |
 | S10 | C | full path with State/Viewport/Role; report missing combinations |
+| S11 | B | read Section children with bounding boxes; non-intersecting placement; re-read verifying zero intersection |
+| S12 | B | switch parent to AUTO (HUG) explicitly; verify each child's `absoluteBoundingBox` inside parent's content box |
+| S13 | B | clone first variant; mutate Hover content only; re-read both variants share `primaryAxisSizingMode=HUG` |
 
 For each run record: scenario ID, chosen option, next action, verbatim rationale, pass/fail, and any rationalization that weakens a mandatory rule.

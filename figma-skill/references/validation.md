@@ -1,5 +1,12 @@
 # Validation and Delivery
 
+## Geometry Validation Checklist
+
+- 每个 in-scope 节点的 `layoutMode` / `primaryAxisSizingMode` / `counterAxisSizingMode` / `constraints` / `textAutoResize`
+- 每个 in-scope 节点与邻居的 bounding box intersection 矩阵
+- 每个 Component Set 的 variant row matrix
+- 只有父子越界、裁切、变体不共享具体风险时才调用 `scripts/figma-validate-bounds.mjs`；离线审计禁止替代结构和视觉验证
+
 ## Three Required Layers
 
 ### Structural

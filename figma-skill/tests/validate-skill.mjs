@@ -163,5 +163,63 @@ function assertNamingAndWorkflow(skill, runtimeMarkdown) {
   assert.match(skill, /Workflow 0/);
 }
 
+function assertGeometryAndLookups(skill, runtimeMarkdown) {
+  // Mandatory Lookups by Phase chapter (spec Section 5.1).
+  assert.ok(skill.includes("## Mandatory Lookups by Phase"), "missing chapter: ## Mandatory Lookups by Phase");
+  for (const row of [
+    "references/installation.md",
+    "references/design-system.md",
+    "references/discovery-and-planning.md",
+    "references/execution.md",
+    "references/validation.md",
+  ]) {
+    assert.ok(skill.includes(row), `Mandatory Lookups row missing: ${row}`);
+  }
+
+  // Component Geometry Mandates chapter (spec Section 7).
+  assert.ok(skill.includes("## Component Geometry Mandates"), "missing chapter: ## Component Geometry Mandates");
+  for (const sub of [
+    "### Auto Layout Mode Selection",
+    "### Fixed Parent Clipping",
+    "### Component Set Variant Baseline",
+  ]) {
+    assert.ok(skill.includes(sub), `Geometry sub-heading missing: ${sub}`);
+  }
+
+  // Six new Red Flags must appear in ## Red Flags — Stop section (spec Section 8).
+  const redFlagsSection = skill.slice(skill.indexOf("## Red Flags — Stop"));
+  const redFlagLines = redFlagsSection
+    .split("\n")
+    .map((line) => line.replace(/^-\s*/, "").trim())
+    .filter(Boolean);
+  for (const flag of [
+    "位置和上次差不多就行。",
+    "这个组件不大，肯定不裁。",
+    "变体形状应该一致。",
+    "读完 spec 就能写，几何之后再说。",
+    "引用文件太长，参考 SKILL.md 就行。",
+    "父级默认就是 HUG，不用看。",
+  ]) {
+    assert.ok(
+      redFlagLines.some((line) => line.includes(flag)),
+      `Red flag missing in dedicated section: ${flag}`,
+    );
+  }
+
+  // Mandatory Lookups rule must live inside ## Non-Negotiable Rules (spec Section 5.2).
+  const nnrStart = skill.indexOf("## Non-Negotiable Rules");
+  const nnrEnd = skill.indexOf("\n## ", nnrStart + 1);
+  const nnrBlock = skill.slice(nnrStart, nnrEnd === -1 ? undefined : nnrEnd);
+  assert.ok(
+    nnrBlock.includes("每个 Workflow 阶段开始时必须先加载规定的 reference"),
+    "Mandatory Lookups rule is not in ## Non-Negotiable Rules",
+  );
+
+  // Geometry-aware and Geometry Validation sections exist in references.
+  assert.match(read("references/execution.md"), /## Geometry-aware Commands/);
+  assert.match(read("references/validation.md"), /## Geometry Validation Checklist/);
+}
+
 assertNamingAndWorkflow(skill, runtimeMarkdown);
-console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, and naming + workflow markers");
+assertGeometryAndLookups(skill, runtimeMarkdown);
+console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, and v1.2 geometry + lookups");

@@ -103,3 +103,19 @@ test("SKILL.md uses mandatory wording tokens", () => {
     assert.ok(skill.includes(phrase), `missing mandatory wording: ${phrase}`);
   }
 });
+
+test("SKILL.md covers visual-overlap placement keywords", () => {
+  for (const phrase of ["children", "absoluteBoundingBox", "0 相交"]) {
+    assert.ok(skill.includes(phrase), `missing overlap keyword: ${phrase}`);
+  }
+});
+
+test("SKILL.md covers three geometry families (A/B/C)", () => {
+  for (const phrase of ["textAutoResize", "primaryAxisSizingMode", "counterAxisSizingMode"]) {
+    assert.ok(skill.includes(phrase), `missing geometry keyword: ${phrase}`);
+  }
+});
+
+test("SKILL.md anchors Component Set variant parity chapter", () => {
+  assert.ok(skill.includes("Component Set Variant Baseline"), "missing variant parity sub-heading");
+});
