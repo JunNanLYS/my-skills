@@ -5,7 +5,7 @@ A run passes only when it chooses the required option and its next action preser
 | ID | Required | Mandatory evidence in the answer |
 |---|---|---|
 | S1 | B | separate design-system approval; no Figma write yet |
-| S2 | B | official stable GitHub Release; verify; Yolo connect/status; no substitute tool |
+| S2 | B | official stable GitHub Release; verify; Yolo connect/status; no substitute tool; first-use --help lookup confirmed for the chosen command |
 | S3 | B | minimal missing rules; document approval precedes Figma plan approval |
 | S4 | B | top-level help + nearest help + explicit user-approved fallback |
 | S5 | B | document wins; current scope + direct dependencies only |

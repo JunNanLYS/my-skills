@@ -3,7 +3,7 @@ name: figma-skill
 model: sonnet
 category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 1.2.1
+version: 1.2.3
 ---
 
 # Figma End-to-End Execution
@@ -23,6 +23,8 @@ version: 1.2.1
 - 验证失败最多自动修正三轮（≤3）；仍失败必须停止写入并完整报告。
 - 硬性要求必须用「必须」「禁止」「只有……才允许」；禁止用弱措辞稀释门禁。
 - 每个 Workflow 阶段开始时必须先加载规定的 reference，证据是相关命令的 `--help` 或同义查询文本与 reference 章节至少各出现一次。缺少证据视为该阶段 `Gate=FAIL` 并禁止进入下一阶段。
+- 禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令是否存在、参数或行为。每个 figma-cli 会话首次使用某命令时，必须运行 `figma-cli <command> --help`；当命令含子命令时，必须继续运行 `figma-cli <command> <subcommand> --help`。Help 输出必须保留在当前会话上下文中，直至 Workflow 11 交付报告。
+- 任何 figma-cli 之外的运行时（node / python / pwsh / sh / 直接读写 .figma JSON / 直接调用 Figma REST API 等）必须按 eval/run gate 同等处理：必须先在 Workflow 6 计划的 `EvalRunFallback` 字段中提供 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit` 完整事实链，并获得用户明确批准。唯一无需此 gate 的运行时是 `scripts/figma-validate-bounds.mjs`（离线 JSON 分析，不与 Figma daemon 通信）。
 
 ## Naming Grammar
 
@@ -198,6 +200,19 @@ Validation=SelectedErrorDisabled
 禁止：跳到 Workflow 9 之前仍未加载 references/validation.md。
 禁止：把"读 SKILL.md 已够"作为不进 reference 的理由。
 
+## Help Discovery Gate
+
+执行任何 figma-cli 命令前必须满足下列门禁：
+
+1. 首次使用该命令：必须运行 `figma-cli <command> --help`，把输出保留在当前会话上下文；命令失败或输出含未知 flag 时必须再运行 `figma-cli <command> <subcommand> --help` 直到定位到目标子命令。
+2. 命令族升级：当 `--help` 输出与上次会话记录存在以下任一差异时必须重查：(a) 子命令集合变化；(b) flag 集合变化；(c) flag 默认值变化。命令族升级后禁止沿用旧记忆。
+3. 失败重查：当某命令退出码非 0 或输出包含 "unknown option" / "deprecated" 时，必须重查 `--help` 后再决定下一步。
+4. 证据链：Workflow 11 交付报告的 `HelpEvidence` 字段必须列出每个实际执行的命令及其 `--help` 摘要（不强制落盘；上下文 + 报告摘录即可）。
+
+禁止：用 docs / blog / 训练记忆作为命令语法来源；figma-cli `--help` 是唯一命令真相。
+禁止：把"上次用过"作为不重查 help 的理由。
+禁止：在执行前未查 help 时使用 eval/run 或非 figma-cli 运行时替代。
+
 ## Workflows 0–11
 
 ### Workflow 0 — Task Classification
@@ -346,7 +361,13 @@ NeighborsInParent: <id, box>
 
 ### Workflow 8 — Fixed-Order Execution
 
-固定依赖顺序：`Foundations → Library Components → Variants/Properties → Specimens → Screens → Flows`。Screen 禁止在组件就绪前创建。每批：读 → 写 → 重读 → 检查（names、NodeIds、hierarchy、geometry 含 Auto Layout mode / sizing 策略 / bounding box 0 相交）→ 通过则下一批。结构变化后必须重读 NodeId。完成条件：所有批次 `BatchGate=PASS`。下一状态：完成 → Workflow 9；任一批次失败 → Workflow 10。
+固定依赖顺序：`Foundations → Library Components → Variants/Properties → Specimens → Screens → Flows`。Screen 禁止在组件就绪前创建。每批：读 → 写 → 重读 → 检查（names、NodeIds、hierarchy、geometry 含 Auto Layout mode / sizing 策略 / bounding box 0 相交）→ 通过则下一批。结构变化后必须重读 NodeId。
+
+如果本批首次引入某命令，必须在该批"读"步骤之前执行：
+- `figma-cli <command> --help`（顶层）
+- 必要时 `figma-cli <command> <subcommand> --help`（子命令）
+
+Help 输出必须保留至当前会话结束；不得丢弃。完成条件：所有批次 `BatchGate=PASS`。下一状态：完成 → Workflow 9；任一批次失败 → Workflow 10。
 
 ### Workflow 9 — Fixed-Order Validation
 
@@ -391,6 +412,9 @@ Validation:
 - OverlapMatrix:
 - VariantRowParity:
 ScreenshotPaths:
+HelpEvidence:
+  - <command>: <one-line excerpt from --help, e.g. "Usage: figma-ds-cli inspect [options] <nodeId>">
+  - <command> <subcommand>: <one-line excerpt>
 RemainingIssues:
 CorrectionRounds:
 FinalStatus: PASS | FAILED
@@ -589,6 +613,10 @@ flowchart LR
 - "读完 spec 就能写，几何之后再说。"
 - "引用文件太长，参考 SKILL.md 就行。"
 - "父级默认就是 HUG，不用看。"
+- "上次用过这个命令，不用再查 help。"
+- "参数我背得出来。"
+- "这个命令很常见。"
+- "figma-cli 没这个能力，写个脚本就行。"
 
 ## Rationalizations Observed in Baseline Tests
 

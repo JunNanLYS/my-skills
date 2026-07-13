@@ -1,5 +1,19 @@
 # Naming and Workflow Coverage
 
+## v1.2.3 Help Discovery Gate Traceability
+
+| Spec section                                  | Implemented at                                                | Marker                                                                 |
+|-----------------------------------------------|---------------------------------------------------------------|------------------------------------------------------------------------|
+| Section 3 — NNR first-use --help             | figma-skill/SKILL.md: ## Non-Negotiable Rules                | "禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令"               |
+| Section 3 — NNR non-CLI runtime gate          | figma-skill/SKILL.md: ## Non-Negotiable Rules                | "figma-cli 之外的运行时" + 6-field EvalRunFallback reference           |
+| Section 4 — Help Discovery Gate chapter       | figma-skill/SKILL.md: ## Help Discovery Gate                 | Chapter heading + 4 forbidden lines                                    |
+| Section 5 — Workflow 8 batch help lookup      | figma-skill/SKILL.md: ### Workflow 8                         | "figma-cli <command> --help" + recursive subcommand bullet            |
+| Section 6 — Workflow 11 HelpEvidence          | figma-skill/SKILL.md: ### Workflow 11                        | "HelpEvidence" field with one-line --help excerpt per command          |
+| Section 7 — Red Flags +4                     | figma-skill/SKILL.md: ## Red Flags — Stop                    | "上次用过这个命令" / "参数我背得出来" / "这个命令很常见" / "figma-cli 没这个能力，写个脚本就行。" |
+| Section 8 — execution.md Command Truth        | figma-skill/references/execution.md: ## Command Truth         | recursive --help + non-CLI runtime gate paragraph                      |
+| Section 9 — validator assertHelpDiscoveryGate | figma-skill/tests/validate-skill.mjs                         | 6 assertions (NNR, chapter, W8, W11, Red Flag, execution.md)         |
+| Section 10 — S2 evidence cell                 | figma-skill/tests/expected-behaviors.md: S2 row              | "first-use --help lookup confirmed for the chosen command"            |
+
 ## v1.2.1 Connect-Status + Specimen Reduction Traceability
 
 | Spec part / section                              | Implemented at                                                | Marker                                                                    |

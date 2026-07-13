@@ -6,26 +6,27 @@
 
 ## Command Truth
 
-陌生语法必须按顺序查询：
+每个 figma-cli 会话首次使用某命令时必须按下列顺序查询，且 help 输出必须保留至会话结束：
 
-1. `figma-cli --help`
-2. `figma-cli <command> --help`
-3. `figma-cli <command> <subcommand> --help`
+1. `figma-cli <command> --help`（顶层）
+2. 当命令含子命令时，`figma-cli <command> <subcommand> --help`
+3. 当上面两步未覆盖目标子命令时，禁止执行；禁止凭旧记忆执行。
 
-当前帮助是唯一命令真相，禁止凭旧记忆执行。
-
-| 意图 | 必须先检查的原生入口 |
+| 意图 | 必须查 help 的命令族 |
 |---|---|
-| 发现 | `files`、`canvas`、`find`、`get`、`inspect`、`spec` |
-| 创建 | `render`、`render-batch`、`blocks`、`shadcn` |
-| 复用 | `instantiate`、`duplicate|dup`、`component`、`variants` |
-| 修改 | `set`、`set-batch`、`padding`、`gap`、`align`、`sizing`、`pin` |
-| 结构 | `node`、`slot`、`section`、`grid`、`unwrap` |
-| 变量 | `variables|var`、`collections|col`、`tokens`、`bind`、`theme` |
-| 验证 | `verify`、`export`、`lint`、`a11y`、`spec --check` |
-| 恢复 | `undo` |
+| 发现 | `figma-cli files` / `canvas` / `find` / `get` / `inspect` / `spec` |
+| 创建 | `figma-cli create` / `create frame` / `create icon` / `create image` / `create rect` |
+| 复用 | `figma-cli instantiate` / `duplicate` / `dup` / `component` / `variants` |
+| 修改 | `figma-cli set` / `set-batch` / `padding` / `gap` / `align` / `sizing` / `pin` |
+| 结构 | `figma-cli node` / `slot` / `section` / `grid` / `unwrap` |
+| 变量 | `figma-cli variables` / `var` / `collections` / `col` / `tokens` / `bind` / `theme` |
+| 验证 | `figma-cli verify` / `export` / `lint` / `a11y` / `spec --check` / `inspect --json` / `unstack --dry-run` |
+| 恢复 | `figma-cli undo` |
+| 几何 | `figma-cli canvas info` / `canvas next` |
 
-当前复制命令是 `duplicate|dup`，禁止使用过期拼写。
+子命令必须二次查 help（如 `figma-cli create frame --help`）。
+
+非 figma-cli 运行时（node / python / pwsh / sh / 直接读 JSON / 直接调 Figma REST API）必须按 eval/run gate 同等处理：必须先证明 figma-cli 无原生能力，并取得用户批准。唯一无需 gate 的非 CLI 路径是 `scripts/figma-validate-bounds.mjs`（离线 JSON 分析）。
 
 ## Geometry-aware Commands
 

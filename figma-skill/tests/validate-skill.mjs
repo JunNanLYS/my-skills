@@ -258,7 +258,56 @@ function assertConnectStatusGate(skill, runtimeMarkdown) {
   );
 }
 
+function assertHelpDiscoveryGate(skill, runtimeMarkdown) {
+  // Part III.1 / Section 9 assertion 1: NNR contains both required sentences.
+  const nnrStart = skill.indexOf("## Non-Negotiable Rules");
+  const nnrEnd = skill.indexOf("\n## ", nnrStart + 1);
+  const nnrBlock = nnrEnd === -1 ? skill.slice(nnrStart) : skill.slice(nnrStart, nnrEnd);
+  assert.ok(
+    nnrBlock.includes("禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令"),
+    "NNR must require --help lookup on first use",
+  );
+  assert.ok(
+    nnrBlock.includes("figma-cli 之外的运行时"),
+    "NNR must gate non-CLI runtimes via eval/run gate",
+  );
+
+  // Section 9 assertion 2: Help Discovery Gate chapter exists.
+  assert.ok(skill.includes("## Help Discovery Gate"), "missing chapter: ## Help Discovery Gate");
+
+  // Section 9 assertion 3: Workflow 8 batch loop mentions --help first-use.
+  const w8Start = skill.indexOf("### Workflow 8");
+  const w8End = skill.indexOf("### Workflow 9", w8Start + 1);
+  const w8Block = w8End === -1 ? skill.slice(w8Start) : skill.slice(w8Start, w8End);
+  assert.ok(
+    w8Block.includes("figma-cli <command> --help"),
+    "Workflow 8 must mention first-use help lookup",
+  );
+
+  // Section 9 assertion 4: Workflow 11 delivery report contains HelpEvidence.
+  const w11Start = skill.indexOf("### Workflow 11");
+  const w11End = skill.indexOf("## Diagrams", w11Start + 1);
+  const w11Block = w11End === -1 ? skill.slice(w11Start) : skill.slice(w11Start, w11End);
+  assert.ok(w11Block.includes("HelpEvidence"), "Workflow 11 must contain HelpEvidence field");
+
+  // Section 9 assertion 5: Red Flag surfaces missing CLI evidence.
+  const rfStart = skill.indexOf("## Red Flags — Stop");
+  const rfBlock = skill.slice(rfStart);
+  assert.ok(
+    rfBlock.includes("figma-cli 没这个能力，写个脚本就行。"),
+    "Red Flags must include the bypass-by-script flag",
+  );
+
+  // Section 9 assertion 6: references/execution.md teaches recursive help discovery.
+  assert.match(
+    read("references/execution.md"),
+    /figma-cli create frame --help/,
+    "references/execution.md must teach subcommand second-pass help lookup",
+  );
+}
+
 assertNamingAndWorkflow(skill, runtimeMarkdown);
 assertGeometryAndLookups(skill, runtimeMarkdown);
 assertConnectStatusGate(skill, runtimeMarkdown);
-console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, v1.2 geometry + lookups, and v1.2.1 connect-status gate");
+assertHelpDiscoveryGate(skill, runtimeMarkdown);
+console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, v1.2 geometry + lookups, v1.2.1 connect-status gate, and v1.2.3 help-discovery gate");
