@@ -12,8 +12,14 @@ const required = [
   "references/discovery-and-planning.md",
   "references/execution.md",
   "references/validation.md",
+  "references/geometry-verifier.md",
   "scripts/install-figma-cli.ps1",
   "scripts/figma-validate-bounds.mjs",
+  "scripts/list-children.mjs",
+  "scripts/overlap-check.mjs",
+  "scripts/apply-layout.mjs",
+  "scripts/resize-section.mjs",
+  "scripts/README.md",
 ];
 
 for (const file of required) {
@@ -310,4 +316,89 @@ assertNamingAndWorkflow(skill, runtimeMarkdown);
 assertGeometryAndLookups(skill, runtimeMarkdown);
 assertConnectStatusGate(skill, runtimeMarkdown);
 assertHelpDiscoveryGate(skill, runtimeMarkdown);
-console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, v1.2 geometry + lookups, v1.2.1 connect-status gate, and v1.2.3 help-discovery gate");
+assertGeometryVerifierStrict(skill, runtimeMarkdown);
+console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, v1.2 geometry + lookups, v1.2.1 connect-status gate, v1.2.3 help-discovery gate, v1.2.4 geometry verifier strict gates");
+
+function assertGeometryVerifierStrict(skill, runtimeMarkdown) {
+  // Assertion 1: Workflow 9 contains figma-cli lint --json.
+  const w9Start = skill.indexOf("### Workflow 9");
+  const w9End = skill.indexOf("### Workflow 10", w9Start + 1);
+  const w9Block = w9End === -1 ? skill.slice(w9Start) : skill.slice(w9Start, w9End);
+  assert.ok(w9Block.includes("figma-cli lint --json"), "Workflow 9 must include figma-cli lint --json");
+
+  // Assertion 2: Workflow 9 contains figma-cli unstack --dry-run.
+  assert.ok(w9Block.includes("figma-cli unstack --dry-run"), "Workflow 9 must include figma-cli unstack --dry-run");
+
+  // Assertion 3: Workflow 9 contains scripts/overlap-check.mjs.
+  assert.ok(w9Block.includes("scripts/overlap-check.mjs"), "Workflow 9 must include scripts/overlap-check.mjs");
+
+  // Assertion 4: Workflow 10 contains overlap-check.mjs.
+  const w10Start = skill.indexOf("### Workflow 10");
+  const w10End = skill.indexOf("### Workflow 11", w10Start + 1);
+  const w10Block = w10End === -1 ? skill.slice(w10Start) : skill.slice(w10Start, w10End);
+  assert.ok(w10Block.includes("overlap-check.mjs"), "Workflow 10 must include overlap-check.mjs");
+
+  // Assertion 5: Workflow 11 template contains GeometryVerifierPipeline.
+  const w11Start = skill.indexOf("### Workflow 11");
+  const w11End = skill.indexOf("## Diagrams", w11Start + 1);
+  const w11Block = w11End === -1 ? skill.slice(w11Start) : skill.slice(w11Start, w11End);
+  assert.ok(w11Block.includes("GeometryVerifierPipeline"), "Workflow 11 must contain GeometryVerifierPipeline field");
+
+  // Assertion 6: NNR contains scripts/ + 4 helper script names.
+  const nnrStart = skill.indexOf("## Non-Negotiable Rules");
+  const nnrEnd = skill.indexOf("\n## ", nnrStart + 1);
+  const nnrBlock = nnrEnd === -1 ? skill.slice(nnrStart) : skill.slice(nnrStart, nnrEnd);
+  assert.ok(nnrBlock.includes("scripts/"), "NNR must mention scripts/ as exemption scope");
+  for (const scriptName of ["list-children.mjs", "overlap-check.mjs", "apply-layout.mjs", "resize-section.mjs"]) {
+    assert.ok(nnrBlock.includes(scriptName), `NNR must list ${scriptName}`);
+  }
+
+  // Assertion 7: Workflow 7 contains list-children.mjs.
+  const w7Start = skill.indexOf("### Workflow 7");
+  const w7End = skill.indexOf("### Workflow 8", w7Start + 1);
+  const w7Block = w7End === -1 ? skill.slice(w7Start) : skill.slice(w7Start, w7End);
+  assert.ok(w7Block.includes("list-children.mjs"), "Workflow 7 must include list-children.mjs");
+
+  // Assertion 8: Workflow 8 contains apply-layout.mjs AND resize-section.mjs.
+  const w8Start = skill.indexOf("### Workflow 8");
+  const w8Block = w9End === -1 ? skill.slice(w8Start) : skill.slice(w8Start, w9End);
+  assert.ok(w8Block.includes("apply-layout.mjs"), "Workflow 8 must include apply-layout.mjs");
+  assert.ok(w8Block.includes("resize-section.mjs"), "Workflow 8 must include resize-section.mjs");
+
+  // Assertion 9: references/execution.md mentions all 9 commands.
+  const executionMd = read("references/execution.md");
+  for (const cmd of [
+    "lint",
+    "unstack",
+    "canvas info",
+    "canvas next",
+    "list-children.mjs",
+    "inspect --json",
+    "overlap-check.mjs",
+    "apply-layout.mjs",
+    "resize-section.mjs",
+  ]) {
+    assert.ok(executionMd.includes(cmd), `references/execution.md must mention ${cmd}`);
+  }
+
+  // Assertion 10: references/geometry-verifier.md exists + 4 commands + 4 matrix names.
+  const geoMd = read("references/geometry-verifier.md");
+  for (const token of [
+    "lint --json",
+    "unstack --dry-run",
+    "overlap-check.mjs",
+    "inspect --json",
+    "LayoutMode",
+    "LayoutSizing",
+    "BoundingBox",
+    "兄弟相交矩阵",
+  ]) {
+    assert.ok(geoMd.includes(token), `references/geometry-verifier.md must contain ${token}`);
+  }
+
+  // Assertion 11: scripts/ directory contains 4 mjs + README (presence check).
+  const scriptsDir = join(root, "scripts");
+  for (const file of ["list-children.mjs", "overlap-check.mjs", "apply-layout.mjs", "resize-section.mjs", "README.md"]) {
+    assert.ok(existsSync(join(scriptsDir, file)), `scripts/${file} missing`);
+  }
+}

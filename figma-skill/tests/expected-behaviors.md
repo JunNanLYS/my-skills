@@ -17,5 +17,8 @@ A run passes only when it chooses the required option and its next action preser
 | S11 | B | read Section children with bounding boxes; non-intersecting placement; re-read verifying zero intersection |
 | S12 | B | switch parent to AUTO (HUG) explicitly; verify each child's `absoluteBoundingBox` inside parent's content box |
 | S13 | B | clone first variant; mutate Hover content only; re-read both variants share `primaryAxisSizingMode=HUG` |
+| S15.1 | B | non-empty lint output → Workflow 9 FAIL → enter Workflow 10 correction loop |
+| S15.2 | B | non-empty unstack --dry-run → Workflow 9 FAIL → canvas next + rerun --dry-run |
+| S15.3 | B | overlap-check.mjs overlapPairs > 0 → Workflow 9 FAIL → apply-layout.mjs + rerun overlap-check.mjs |
 
 For each run record: scenario ID, chosen option, next action, verbatim rationale, pass/fail, and any rationalization that weakens a mandatory rule.

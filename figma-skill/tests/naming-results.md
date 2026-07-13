@@ -1,5 +1,23 @@
 # Naming and Workflow Coverage
 
+## v1.2.4 Geometry Verifier Strict Traceability
+
+| Spec section                            | Implemented at                                                  | Marker                                                                 |
+|-----------------------------------------|-----------------------------------------------------------------|------------------------------------------------------------------------|
+| §3.1 Workflow 9 three-gate order        | figma-skill/SKILL.md: ### Workflow 9                            | `figma-cli lint --json` → `figma-cli unstack --dry-run` → `scripts/overlap-check.mjs` |
+| §3.2 Workflow 10 verifier-aware loop   | figma-skill/SKILL.md: ### Workflow 10                           | `overlap-check.mjs` / `unstack --dry-run` / `inspect --json` correction paths |
+| §3.3 Workflow 11 GeometryVerifierPipeline | figma-skill/SKILL.md: ### Workflow 11                          | `GeometryVerifierPipeline:` field + 未提交即 `FinalStatus=FAILED` 规则    |
+| §3.4 Workflow 6 OverlapCheck split      | figma-skill/SKILL.md: ### Workflow 6                            | `LintEvidence` / `UnstackEvidence` / `OverlapCheckEvidence` 三段         |
+| §3.5 NNR eval/run gate exemption        | figma-skill/SKILL.md: ## Non-Negotiable Rules                   | scripts/ + 4 个 mjs 名字列入豁免规则                                       |
+| §3.6 Workflow 7 list-children baseline  | figma-skill/SKILL.md: ### Workflow 7                            | `list-children.mjs` baseline 4 步                                          |
+| §3.7 Workflow 8 apply-layout / resize   | figma-skill/SKILL.md: ### Workflow 8                            | `apply-layout.mjs` / `resize-section.mjs` + PLANS / PAD_X / PAD_Y        |
+| §4 references/execution.md decision table | figma-skill/references/execution.md: ## Geometry-aware Commands | 9 条命令表 (lint / unstack / canvas info / canvas next / inspect / 4 mjs) |
+| §5 references/geometry-verifier.md new  | figma-skill/references/geometry-verifier.md                    | 4 闸门 + 4 矩阵名 + 失败处理优先级                                            |
+| §6 validator assertGeometryVerifierStrict | figma-skill/tests/validate-skill.mjs: assertGeometryVerifierStrict | 11 assertions (W9 / W10 / W11 / NNR / W7 / W8 / execution.md / geometry-verifier.md / scripts dir) |
+| §7 S15 multi-step scenarios              | figma-skill/tests/scenarios.md                                 | S15.1 / S15.2 / S15.3 三步子场景                                              |
+| §7 expected-behaviors                    | figma-skill/tests/expected-behaviors.md                        | S15.1 / S15.2 / S15.3 rows                                                |
+| §10 v1.2.4 version bump                 | figma-skill/SKILL.md frontmatter                               | `version: 1.2.4`                                                          |
+
 ## v1.2.3 Help Discovery Gate Traceability
 
 | Spec section                                  | Implemented at                                                | Marker                                                                 |
@@ -133,3 +151,4 @@
 - The five new Red Flags from spec Section 9 are listed in `SKILL.md` `## Red Flags — Stop` at line 462.
 - v1.2: SKILL.md grew from 494 to 598 lines (+104). Adding `## Mandatory Lookups by Phase`, expanding Workflows 4A/4D/4F/6/7/8/9/11, and inserting `## Component Geometry Mandates` produced the change. References remain minimal-only.
 - v1.2: Tests grew from 7 → 10 in `naming-and-workflow.test.mjs`; validator adds `assertGeometryAndLookups`.
+- v1.2.4: SKILL.md grew further with Workflows 6/7/8/9/10/11 inserts + NNR +1 rule; validator adds `assertGeometryVerifierStrict` (11 assertions). scripts/ gains 4 helper scripts (list-children / overlap-check / apply-layout / resize-section) + README. New reference file `references/geometry-verifier.md`.

@@ -3,7 +3,7 @@ name: figma-skill
 model: sonnet
 category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 1.2.3
+version: 1.2.4
 ---
 
 # Figma End-to-End Execution
@@ -25,6 +25,7 @@ version: 1.2.3
 - 每个 Workflow 阶段开始时必须先加载规定的 reference，证据是相关命令的 `--help` 或同义查询文本与 reference 章节至少各出现一次。缺少证据视为该阶段 `Gate=FAIL` 并禁止进入下一阶段。
 - 禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令是否存在、参数或行为。每个 figma-cli 会话首次使用某命令时，必须运行 `figma-cli <command> --help`；当命令含子命令时，必须继续运行 `figma-cli <command> <subcommand> --help`。Help 输出必须保留在当前会话上下文中，直至 Workflow 11 交付报告。
 - 任何 figma-cli 之外的运行时（node / python / pwsh / sh / 直接读写 .figma JSON / 直接调用 Figma REST API 等）必须按 eval/run gate 同等处理：必须先在 Workflow 6 计划的 `EvalRunFallback` 字段中提供 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit` 完整事实链，并获得用户明确批准。唯一无需此 gate 的运行时是 `scripts/figma-validate-bounds.mjs`（离线 JSON 分析，不与 Figma daemon 通信）。
+- `scripts/` 下的四个脚本属于项目预设助手脚本，通过 eval/run gate 预设批准：`list-children.mjs`（只读）、`overlap-check.mjs`（只读）、`apply-layout.mjs`（写动作，必须经 Workflow 6 审批）、`resize-section.mjs`（写动作，必须经 Workflow 6 审批）。调用只读类不需要在 Workflow 6 `EvalRunFallback` 中再次提供六字段事实链；调用写动作类必须在 Workflow 6 `CommandPlan` 中显式列出 PLANS / PAD_X / PAD_Y 等入口常量并经用户审批。四个脚本的路径与入口常量都必须在 CommandPlan 中显式列出。
 
 ## Naming Grammar
 
@@ -327,15 +328,20 @@ NamingMigration:
 AffectedDependencies:
 OutOfScopeIssues:
 CommandPlan:
+  - Workflow 9 三道闸门（lint / unstack --dry-run / overlap-check.mjs）调用点
+  - scripts/overlap-check.mjs 的 PARENT_ID 必须显式给出
 PlacementAudit:
 GeometryAudit:
 OverlapCheck:
+  LintEvidence: figma-cli lint --json 计划
+  UnstackEvidence: figma-cli unstack --dry-run 计划
+  OverlapCheckEvidence: figma-cli run scripts/overlap-check.mjs 计划（必须填 PARENT_ID）
 EvalRunFallback:
 BaselinePlan:
 ValidationPlan:
 ```
 
-`PlacementAudit` 必须包含用于验证零相交所用的命令、邻居列表、期望零相交说明。`GeometryAudit` 必须列出 mode / sizing / 变体行矩阵。`OverlapCheck` 必须输出每个节点的相交矩阵。
+`PlacementAudit` 必须包含用于验证零相交所用的命令、邻居列表、期望零相交说明。`GeometryAudit` 必须列出 mode / sizing / 变体行矩阵。`OverlapCheck` 必须输出每个节点的相交矩阵，并按上述三段分别列出三道闸门的证据计划。
 
 `EvalRunFallback` 必须包含 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit: True | False`。第六条事实：写入后必须重读几何，即使用 `eval/run` 也禁止跳过。
 
@@ -359,6 +365,16 @@ NeighborsInParent: <id, box>
 
 完成条件：`BaselineGate=PASS`。下一状态：Workflow 8。
 
+每个目标节点的 baseline 几何数据必须通过 `list-children.mjs` 取得：
+
+1. 编辑 `scripts/list-children.mjs` 顶部 `PARENT_ID` 为目标 parent NodeId；如需过滤类型，调整 `ONLY_TYPE`。
+2. 运行 `figma-cli run scripts/list-children.mjs` 取得 JSON `{ parent, count, items[] }`，每项含 `id / name / type / x / y / w / h / right / bottom`。
+3. 将 `items[]` 与 Workflow 6 `GeometryAudit` 字段交叉对照：
+   - 节点数与 `count` 一致；
+   - bbox 字段全部齐全；
+   - 无 id 重复。
+4. 写入前 baseline 与 Workflow 8 重读值必须一致；不一致视为 Workflow 7 FAIL。
+
 ### Workflow 8 — Fixed-Order Execution
 
 固定依赖顺序：`Foundations → Library Components → Variants/Properties → Specimens → Screens → Flows`。Screen 禁止在组件就绪前创建。每批：读 → 写 → 重读 → 检查（names、NodeIds、hierarchy、geometry 含 Auto Layout mode / sizing 策略 / bounding box 0 相交）→ 通过则下一批。结构变化后必须重读 NodeId。
@@ -369,24 +385,63 @@ NeighborsInParent: <id, box>
 
 Help 输出必须保留至当前会话结束；不得丢弃。完成条件：所有批次 `BatchGate=PASS`。下一状态：完成 → Workflow 9；任一批次失败 → Workflow 10。
 
+每批"读 → 写 → 重读"中：
+
+- 读阶段除 `figma-cli get / inspect --json` 外，必要时应同时运行 `scripts/list-children.mjs` 取 parent children baseline。
+- 写阶段如需批量应用 `(id, x, y)` 计划，使用 `apply-layout.mjs`：
+  1. 编辑 `scripts/apply-layout.mjs` 顶部 `PLANS` 数组；
+  2. `figma-cli run scripts/apply-layout.mjs`；
+  3. 重读 children 与 bbox 验证与计划一致。
+- 每批结束后如需收敛 Section / Frame 实际占用空间，使用 `resize-section.mjs`：
+  1. 编辑 `scripts/resize-section.mjs` 顶部 `PARENT_ID` 与 `PAD_X / PAD_Y`；
+  2. `figma-cli run scripts/resize-section.mjs`；
+  3. 重读 parent bbox 验证新尺寸。
+
+`apply-layout.mjs` / `resize-section.mjs` 的 `PLANS` / `PARENT_ID` / `PAD_X` / `PAD_Y` 必须在 Workflow 6 `CommandPlan` 显式给出并经用户审批。
+
 ### Workflow 9 — Fixed-Order Validation
 
 固定顺序：`Naming → Structure → Geometry → Visual → DesignSystem → Flow`。
 
 Visual 必须实际打开 `<Current workspace>/temp/figma-screenshot/` 中的截图。
 
-Geometry 层必须执行：
+Geometry 层必须按下列固定顺序执行三道闸门，任一闸门 FAIL 立即停止
+验收并进入 Workflow 10：
 
-- 读取每个 in-scope 节点的 `layoutMode`、`primaryAxisSizingMode`、`counterAxisSizingMode`、`constraints`、`textAutoResize`。
-- 计算并输出 bounding box 相交矩阵。
-- 对每个 in-scope Component Set 列出 variant 行矩阵。
-- `GeometryValidation: PASS | FAIL` 决定是否进入 Visual。
+1. `figma-cli lint --json`
+   - 作用域：当前 Page / 文件全量 lint
+   - 输出：lint issue 列表；非空即为 FAIL
+   - 不通过禁止进入下一闸门
+2. `figma-cli unstack --dry-run`
+   - 作用域：当前 Page top-level 节点
+   - 输出：top-level 重叠对列表；非空即为 FAIL
+   - 不通过禁止进入下一闸门
+3. `figma-cli run scripts/overlap-check.mjs`
+   - 调用前必须编辑脚本顶部 `PARENT_ID` 为当前任务目标 Section / Frame 的 NodeId
+   - 作用域：`PARENT_ID` 直接子节点的两两 AABB 相交矩阵
+   - 输出：JSON `{ total, overlapPairs, overlaps[] }`；顶部改 `OUTPUT_MODE = 'summary'` 出人读文本
+   - `overlapPairs > 0` 即为 FAIL
+   - 不通过禁止进入 Visual 层
+
+对每个 in-scope Component Set 额外列出每个 variant 的 `(variant, layoutSizingHorizontal, layoutSizingVertical)`；若任意 variant 与多数行的 layoutSizing 不同值，即为 FAIL。读取方式：`figma-cli inspect --json <id>`。
+
+TextNode 的 `textAutoResize` 直接验证未实现，由 Visual 层兜底；Visual 截图必须实际打开 `<Current workspace>/temp/figma-screenshot/` 中的截图，并对照 `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`。
+
+`GeometryValidation: PASS | FAIL` 决定是否进入 Visual。
 
 完成条件：`ValidationGate=PASS`。下一状态：PASS → 11；FAIL → 10。
 
 ### Workflow 10 — At Most Three Correction Rounds
 
 最多三轮：定位 → 最小修正 → 重跑受影响验证。第三轮后仍失败必须停止写入，禁止第四轮；输出完整失败报告。完成条件：第三轮内 PASS 或正式失败。下一状态：PASS → 9；失败 → 停止。
+
+修正循环定位阶段必须读取 Workflow 9 三道闸门输出：
+
+- `lint --json` 输出非空 → 最小修正是按 lint 报告逐项改；自动 `--fix` 仅在 lint 报告明确标注可自动修复时使用，禁止批量 `--fix`。
+- `unstack --dry-run` 输出非空 → 最小修正是把相交节点坐标改为 `figma-cli canvas next` 输出值，再重写 + 重跑 `unstack --dry-run`。
+- `scripts/overlap-check.mjs` 输出 `overlapPairs > 0` → 最小修正是改节点 `(x, y)` 后用 `scripts/apply-layout.mjs` 一次性应用计划，再用 `overlap-check.mjs` 重检。
+- `inspect --json` 输出显示 variant 的 layoutSizing 与基线不一致 → 最小修正是重新 clone 基线 variant 再修改，再重检。
+- 上述任一闸门无法解决即视为 STOP；禁止第四轮。
 
 ### Workflow 11 — Delivery
 
@@ -415,12 +470,18 @@ ScreenshotPaths:
 HelpEvidence:
   - <command>: <one-line excerpt from --help, e.g. "Usage: figma-ds-cli inspect [options] <nodeId>">
   - <command> <subcommand>: <one-line excerpt>
+GeometryVerifierPipeline:
+  - figma-cli lint --json: <path or inline excerpt>
+  - figma-cli unstack --dry-run: <path or inline excerpt>
+  - figma-cli run scripts/overlap-check.mjs: <path or inline excerpt>
+OverlapMatrix: <path to overlap-check JSON>
+VariantRowParity: <path to per-variant inspect --json output>
 RemainingIssues:
 CorrectionRounds:
 FinalStatus: PASS | FAILED
 ```
 
-只有 `FinalStatus=PASS` 才允许声明完成。
+只有 `FinalStatus=PASS` 才允许声明完成。三道闸门输出必须随 Workflow 11 交付报告一并提交，至少 inline excerpt；未提交视为 `FinalStatus=FAILED`。
 
 ## Diagrams
 

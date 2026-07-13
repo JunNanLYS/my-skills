@@ -30,8 +30,27 @@
 
 ## Geometry-aware Commands
 
-- 必须使用 silships/figma-cli 当前帮助确认 geometry-affecting 命令集合（sizing、pin、padding、gap、align、auto-layout 等）当前是否原生可用。被合并或拆分的命令以最新帮助为准。
-- `duplicate|dup` 会改变父级 NodeId 与 bounding box，必须 Workflow 8 重读。
+| 需要 | 命令 |
+|---|---|
+| 文件级 lint | `figma-cli lint [--json] [--fix]` |
+| Top-level 节点相交（dry-run） | `figma-cli unstack --dry-run` |
+| 列 Page 范围 | `figma-cli canvas info` |
+| 取非重叠坐标 | `figma-cli canvas next` |
+| 列 Section children | `figma-cli run scripts/list-children.mjs` |
+| 单节点几何 + sizing | `figma-cli inspect --json <id>` |
+| Section 内 AABB 相交矩阵 | `figma-cli run scripts/overlap-check.mjs` |
+| 移动计划应用 | `figma-cli run scripts/apply-layout.mjs` |
+| 收敛 Section size | `figma-cli run scripts/resize-section.mjs` |
+
+调用项目预设助手脚本时必须遵守 figma-cli 沙箱约束：
+
+- 不透传 `--arg`；调用前编辑脚本顶部 `PARENT_ID` 等入口常量。
+- plugin sandbox 无 `process` / 环境变量访问。
+- 写入类脚本（`apply-layout` / `resize-section`）必须先在 Workflow 6 审批。
+
+`duplicate|dup` 会改变父级 NodeId 与 bounding box，必须 Workflow 8 重读。
+
+任何 figma-cli 与项目预设助手脚本之外的运行时仍按 NNR 的 eval/run gate 六字段事实链执行；禁止借项目预设助手脚本夹带未审批脚本。
 
 ## Small-Batch Loop
 

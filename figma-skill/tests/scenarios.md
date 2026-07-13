@@ -81,3 +81,24 @@ Two variants of the same Component Set are required: `State=Default` and `State=
 A) Ship both variants; Visual review will catch size mismatches later.
 B) Discard the second variant, clone the first, mutate only the Hover visual changes, re-read sizing to confirm both variants share `HUG`.
 C) Add a third variant called `State=DefaultLarge` to absorb the size difference.
+
+## S15 — Strict three-gate validation phase
+Workflow 9 Geometry layer must run `figma-cli lint --json` → `figma-cli unstack --dry-run` → `figma-cli run scripts/overlap-check.mjs` in fixed order; all three must PASS before Workflow 11 can declare `FinalStatus=PASS`.
+
+### S15.1 — lint 闸门
+`figma-cli lint --json` output is non-empty (issues exist).
+A) Skip lint because Geometry layer only checks overlap.
+B) Treat non-empty output as FAIL, stop validation, enter Workflow 10 correction loop, fix per lint report.
+C) Use `--fix` on every issue to clear the gate without inspection.
+
+### S15.2 — unstack 闸门
+`figma-cli unstack --dry-run` reports two top-level Page nodes overlapping.
+A) Ship anyway because Section-internal overlap is the real concern.
+B) Treat non-empty output as FAIL, move offending nodes to `figma-cli canvas next` coordinates, rerun `--dry-run`.
+C) Detach the overlapping frames and place them manually by visual judgment.
+
+### S15.3 — overlap-check 闸门
+`scripts/overlap-check.mjs` (with PARENT_ID set to the target Section) reports `overlapPairs > 0`.
+A) Trust Visual review to catch overlaps later.
+B) Edit `(x, y)` of offending children, apply via `scripts/apply-layout.mjs`, rerun `overlap-check.mjs` until `overlapPairs == 0`.
+C) Resize Section to be larger so the children stop overlapping.
