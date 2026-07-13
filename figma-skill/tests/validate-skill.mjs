@@ -25,7 +25,7 @@ assert.ok(skill.startsWith("---\n"), "frontmatter must be first");
 for (const field of ["name: figma-skill", "model:", "category:", "description:"]) {
   assert.match(skill, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
-assert.match(skill, /^version: \d+\.\d+$/m);
+assert.match(skill, /^version: \d+\.\d+(?:\.\d+)?$/m);
 
 for (const phrase of [
   "必须使用 `figma-cli`",
@@ -74,9 +74,6 @@ function assertNamingAndWorkflow(skill, runtimeMarkdown) {
     "Viewport=<Viewport>",
     "Role=<Role>",
     "Specimen/StateGallery",
-    "Specimen/VariantMatrix",
-    "Specimen/Properties",
-    "Specimen/Usage",
     "Foundation",
     "Primitive",
     "Action",
@@ -220,6 +217,48 @@ function assertGeometryAndLookups(skill, runtimeMarkdown) {
   assert.match(read("references/validation.md"), /## Geometry Validation Checklist/);
 }
 
+function assertConnectStatusGate(skill, runtimeMarkdown) {
+  // Part I, assertion 1: Workflow 1 mentions `status` before the first `connect`.
+  const wf1Start = skill.indexOf("### Workflow 1");
+  assert.ok(wf1Start !== -1, "Workflow 1 heading not found in SKILL.md");
+  const wf1End = skill.indexOf("### Workflow 2", wf1Start + 1);
+  const wf1Block = wf1End === -1 ? skill.slice(wf1Start) : skill.slice(wf1Start, wf1End);
+  const statusIdx = wf1Block.indexOf("status");
+  const connectIdx = wf1Block.indexOf("connect");
+  assert.ok(
+    statusIdx !== -1 && connectIdx !== -1 && statusIdx < connectIdx,
+    "Workflow 1 must mention status before connect",
+  );
+
+  // Part I, assertion 2: Workflow 1 contains the prohibition.
+  assert.ok(
+    wf1Block.includes("禁止在 status 之前调用 connect"),
+    "Workflow 1 missing prohibition: 禁止在 status 之前调用 connect",
+  );
+
+  // Part I, assertion 3: Workflow 1 forbids daemon restart.
+  assert.ok(
+    wf1Block.includes("daemon restart"),
+    "Workflow 1 must forbid daemon restart / stop / reconnect",
+  );
+
+  // Part I, assertion 4: Yolo Connection Gate step 1 is figma-cli status.
+  const installation = read("references/installation.md");
+  const yoloStart = installation.indexOf("## Yolo Connection Gate");
+  assert.ok(yoloStart !== -1, "Yolo Connection Gate section not found");
+  const yoloEnd = installation.indexOf("\n## ", yoloStart + 1);
+  const yoloBlock = yoloEnd === -1 ? installation.slice(yoloStart) : installation.slice(yoloStart, yoloEnd);
+  assert.match(yoloBlock, /^1\.\s*`?figma-cli status`?/m);
+
+  // Part I, assertion 5: negative — no Concurrent Agent Connection section.
+  assert.doesNotMatch(
+    installation,
+    /^##\s+Concurrent Agent Connection\s*$/m,
+    "references/installation.md must not contain a Concurrent Agent Connection section",
+  );
+}
+
 assertNamingAndWorkflow(skill, runtimeMarkdown);
 assertGeometryAndLookups(skill, runtimeMarkdown);
-console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, and v1.2 geometry + lookups");
+assertConnectStatusGate(skill, runtimeMarkdown);
+console.log("PASS: figma-skill structure, wording, S1-S8 rule coverage, naming + workflow markers, v1.2 geometry + lookups, and v1.2.1 connect-status gate");

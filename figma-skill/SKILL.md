@@ -3,7 +3,7 @@ name: figma-skill
 model: sonnet
 category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 1.2
+version: 1.2.1
 ---
 
 # Figma End-to-End Execution
@@ -14,7 +14,7 @@ version: 1.2
 
 - 所有 Figma 读取、创建、修改、导出和验证必须使用 `figma-cli`。
 - 禁止使用 Figma MCP、其他 Figma CLI 或 GUI 自动化作为替代路径。
-- 每个新会话首次执行 Figma 任务时，必须先运行 `figma-cli connect`，再运行 `figma-cli status`。
+- 每个新会话首次执行 Figma 任务时，必须先运行 `figma-cli status`（status 显示已连接时直接进入下一步）；未连接才允许 `figma-cli connect`，最后再 `figma-cli status` 确认。
 - `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md` 是唯一设计规范来源。
 - 设计系统审批与 Figma 首次写入审批是两次独立审批；前者禁止被解释为后者。
 - 只有当前 CLI 顶层帮助和最接近意图的子命令帮助都证明缺少原生能力，并且用户批准该精确降级时，才允许使用 `eval/run`。
@@ -206,7 +206,18 @@ Validation=SelectedErrorDisabled
 
 ### Workflow 1 — Workspace and Environment
 
-固定动作：固定 `<Current workspace>`；执行 `figma-cli --version`、`--help`、Windows 安装（必要时）；`connect`；`status`。完成条件：`EnvironmentGate=PASS`。下一状态：PASS → 2；FAIL → 停止。
+固定动作（顺序固定，禁止调换）：
+
+1. 固定 `<Current workspace>`；
+2. 执行 `figma-cli --version` 与 `--help`；任一失败禁止继续；
+3. Windows 安装仅在 CLI 缺失或两个检查失败时执行；
+4. 执行 `figma-cli status`：
+   - 输出同时包含 "Connected to Figma" 与 "Daemon running" → 视为已连接，跳过 connect；`EnvironmentGate=PASS` 直接进入 Workflow 2；
+   - 否则按 `references/installation.md` 的 connect 路径继续。
+5. 禁止在 status 之前调用 connect；
+6. 禁止调用 `figma-cli daemon restart / stop / reconnect`；这些命令会重发 token，破坏共享 daemon 的其他会话。
+
+完成条件：`EnvironmentGate=PASS`。下一状态：PASS → 2；FAIL → 停止。
 
 ### Workflow 2 — Design System Gate
 
@@ -222,7 +233,7 @@ Validation=SelectedErrorDisabled
 
 ### Workflow 4A — Create Component
 
-固定动作：在 `01 Library` 中只读检查是否已有匹配组件；不存在则按 Category 创建 Section；创建主组件或 Component Set；补齐 Variant Property；添加四个 Specimen。完成条件：组件和 Specimen 已就位。下一状态：Workflow 5。
+固定动作：在 `01 Library` 中只读检查是否已有匹配组件；不存在则按 Category 创建 Section；创建主组件或 Component Set；补齐 Variant Property；添加 `Specimen/StateGallery`，且必须包含 Component Set 的全部 variant。完成条件：组件和 `Specimen/StateGallery` 已就位。下一状态：Workflow 5。
 
 几何与位置硬性附加动作：
 

@@ -1,5 +1,18 @@
 # Naming and Workflow Coverage
 
+## v1.2.1 Connect-Status + Specimen Reduction Traceability
+
+| Spec part / section                              | Implemented at                                                | Marker                                                                    |
+|--------------------------------------------------|---------------------------------------------------------------|---------------------------------------------------------------------------|
+| Part I.3 — Workflow 1 status-first sequence      | figma-skill/SKILL.md: Workflow 1                               | 6 步顺序 + "禁止在 status 之前调用 connect"                                |
+| Part I.5 — Yolo Connection Gate rewritten         | figma-skill/references/installation.md: Yolo Connection Gate   | 4 步顺序 + 末尾 "任何情况下禁止自动调用 daemon restart"                    |
+| Part I, validator assertion 3                     | figma-skill/SKILL.md: Workflow 1                               | "daemon restart" literal in Workflow 1 block                              |
+| Part I, validator assertion 5 (negative)          | figma-skill/references/installation.md                        | no `## Concurrent Agent Connection` heading                               |
+| Part II.3 — Workflow 4A specimen count 4→1       | figma-skill/SKILL.md: Workflow 4A                              | "Specimen/StateGallery" only, contains all variants                        |
+| Part II.4 — validator removes three Specimens     | figma-skill/tests/validate-skill.mjs: assertNamingAndWorkflow | only Specimen/StateGallery listed; VariantMatrix/Properties/Usage removed  |
+| Part III.1 — validator adds Connect-Status Gate   | figma-skill/tests/validate-skill.mjs: assertConnectStatusGate | 5 assertions (status-before-connect, prohibition, daemon-restart, status-first Yolo, negative assertion) |
+| Part III.2 — validator keeps StateGallery        | figma-skill/tests/validate-skill.mjs                          | Specimen/StateGallery in marker list                                      |
+
 ## v1.2 Geometry & Placement Mandates Traceability
 
 | Spec section                                     | Implemented at                  | Marker                                                                 |

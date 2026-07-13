@@ -24,10 +24,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <skill-directory>/scripts/in
 
 ## Yolo Connection Gate
 
-每个新会话执行一次：
+每个新会话必须按下列顺序执行：
 
-1. `figma-cli connect`
-2. `figma-cli status`
-3. Figma Desktop 连接和 daemon 状态都通过后才允许继续。
-
-失败时检查当前 `connect --help`、`status --help` 和 `daemon --help`，并报告失败层。只有用户明确要求时才允许 Safe 模式。连接失败必须停止所有 Figma 读写。
+1. `figma-cli status`
+   - 输出同时包含 "Connected to Figma" 与 "Daemon running" → 跳过 connect，直接进入下一步；
+   - 否则按步骤 2-4 继续。
+2. `figma-cli connect`（不传 `--safe`，除非用户明确批准）
+3. `figma-cli status`（确认 PASS）
+4. 失败时按当前 `connect --help`、`status --help` 和 `daemon --help` 报告；失败层必须明确（CLI 缺失 / daemon 未运行 / token 失效 / CDP 断开）。任何情况下禁止自动调用 `daemon restart`。
