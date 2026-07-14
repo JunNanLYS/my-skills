@@ -31,6 +31,14 @@ export const RESUMABLE_STATUSES = Object.freeze([
   "NEEDS_REPLAN",
 ]);
 
+// Workflows that perform actual Figma writes. A task with `writeRequired ===
+// false` must never enter these workflows.
+export const WRITE_REQUIRED_WORKFLOWS = Object.freeze([
+  "6",
+  "8",
+  "10",
+]);
+
 export const ARCHIVE_STATUSES = Object.freeze([
   "NOT_ARCHIVED",
   "ARCHIVING",

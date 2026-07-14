@@ -24,6 +24,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { TaskStateError } from "./lib/task-state/errors.mjs";
+import { acquireLease, renewLease, releaseLease, takeoverLease } from "./lib/task-state/lease.mjs";
+import { runAcquireLease, runRenewLease, runTakeoverLease, runReleaseLease } from "./lib/task-state/lease-commands.mjs";
+import { runCheckpoint } from "./lib/task-state/checkpoint-commands.mjs";
 import {
   atomicWriteJson,
   atomicWriteText,
@@ -739,6 +742,25 @@ function humanOutput(envelope) {
     process.stdout.write(data.recovery);
     return;
   }
+  if (envelope.command === "acquire" || envelope.command === "renew") {
+    const lease = data.lease;
+    process.stdout.write(`lease ${lease.taskId} holder=${lease.holder} expires=${lease.expiresAt}\n`);
+    return;
+  }
+  if (envelope.command === "takeover") {
+    const lease = data.lease;
+    process.stdout.write(`takeover ${lease.taskId} newHolder=${lease.holder} priorHolder=${lease.priorHolder}\n`);
+    return;
+  }
+  if (envelope.command === "release") {
+    process.stdout.write(`released ${data.taskId} holder=${data.holder}\n`);
+    return;
+  }
+  if (envelope.command === "checkpoint") {
+    const s = data.state;
+    process.stdout.write(`checkpoint ${s.taskId} status=${s.status} workflow=${s.currentWorkflow} revision=${s.revision}\n`);
+    return;
+  }
   process.stdout.write(JSON.stringify(envelope, null, 2) + "\n");
 }
 
@@ -768,9 +790,34 @@ function dispatch(args) {
     case "show":
       runCommand("show", ({ projectRoot, flags, json }) => showTask({ projectRoot, flags, json }));
       return;
+    case "acquire":
+      runCommand("acquire", ({ projectRoot, flags, json }) =>
+        runAcquireLease({ projectRoot, flags, json }),
+      );
+      return;
+    case "renew":
+      runCommand("renew", ({ projectRoot, flags, json }) =>
+        runRenewLease({ projectRoot, flags, json }),
+      );
+      return;
+    case "takeover":
+      runCommand("takeover", ({ projectRoot, flags, json }) =>
+        runTakeoverLease({ projectRoot, flags, json }),
+      );
+      return;
+    case "release":
+      runCommand("release", ({ projectRoot, flags, json }) =>
+        runReleaseLease({ projectRoot, flags, json }),
+      );
+      return;
+    case "checkpoint":
+      runCommand("checkpoint", ({ projectRoot, flags, json }) =>
+        runCheckpoint({ projectRoot, flags, json }),
+      );
+      return;
     default:
       process.stderr.write(
-        `usage: figma-task-state.mjs <init-project|create|list|show> --project <root> [--json]\n`,
+        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint> --project <root> [--json]\n`,
       );
       process.exit(2);
   }
