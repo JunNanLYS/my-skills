@@ -1,41 +1,248 @@
 // figma-helpers/resize-section.mjs
 //
-// 基于 children bbox 自动算 Section / Frame 的 min size, 加 padding 调整。
-// 用于 Workflow 8 末尾或 Workflow 9, 在批量移动后收缩 Section 实际占用空间。
+// Fail-closed section resizer.  Validates the container node, rejects
+// negative child coordinates, computes the bounding box of all children,
+// then applies approved padding.  Never silently catches resize errors.
 //
-// 用法 (figma-cli run 不透传参数, 调用前改 PARENT_ID / PAD_X / PAD_Y):
-//
-//   1. 编辑第 14 行的 PARENT_ID / PAD_X / PAD_Y
-//   2. figma-cli run scripts/figma-helpers/resize-section.mjs
-//
-// 默认 pad: 80 x 200px (横向留白 80, 纵向留白 200)。
+// Usage:
+//   1. Workflow 6 CommandPlan injects TASK_ID, BASELINE_REVISION,
+//      PARENT_ID, EXPECTED_PARENT_TYPE, PAD_X, PAD_Y.
+//   2. figma-cli run scripts/resize-section.mjs
 
-(function () {
-  // ===== 在这里改 =====
-  const PARENT_ID = '1348:47';
-  const PAD_X = 80;
-  const PAD_Y = 200;
-  // ====================
+(async function () {
+  // ===== 常量 (Workflow 6 CommandPlan 注入) =====
+  const TASK_ID = "";
+  const BASELINE_REVISION = "";
+  const PARENT_ID = "";
+  const EXPECTED_PARENT_TYPE = "";
+  const PAD_X = 0;
+  const PAD_Y = 0;
+  // ==============================================
 
-  const sec = figma.getNodeById(PARENT_ID);
-  if (!sec) throw new Error('resize-section: 找不到 parent ' + PARENT_ID);
-
-  let maxB = 0, maxR = 0;
-  for (const c of sec.children) {
-    if (c.y + c.height > maxB) maxB = c.y + c.height;
-    if (c.x + c.width  > maxR) maxR = c.x + c.width;
+  // ---------------------------------------------------------------------------
+  // Envelope helper
+  // ---------------------------------------------------------------------------
+  function envelope(overrides) {
+    const base = {
+      ok: true,
+      code: "OK",
+      summary: {
+        taskId: TASK_ID || null,
+        baselineRevision: BASELINE_REVISION || null,
+        parentId: PARENT_ID || null,
+        parentType: null,
+      },
+      issues: [],
+      observedAt: null,
+      parent: PARENT_ID || null,
+      previous: null,
+      resized: null,
+      padding: { x: PAD_X, y: PAD_Y },
+    };
+    return JSON.stringify({ ...base, ...overrides }, null, 2);
   }
-  const newH = Math.ceil(maxB + PAD_Y);
+
+  // ---------------------------------------------------------------------------
+  // 1. Validate PARENT_ID
+  // ---------------------------------------------------------------------------
+  if (!PARENT_ID) {
+    return envelope({
+      ok: false,
+      code: "EMPTY_PARENT_ID",
+      parent: PARENT_ID,
+      summary: {
+        taskId: TASK_ID || null,
+        baselineRevision: BASELINE_REVISION || null,
+        parentId: PARENT_ID,
+        parentType: null,
+      },
+      issues: [
+        {
+          severity: "error",
+          message: "PARENT_ID is empty",
+        },
+      ],
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. Node lookup
+  // ---------------------------------------------------------------------------
+  const parent = await figma.getNodeByIdAsync(PARENT_ID);
+  if (!parent) {
+    return envelope({
+      ok: false,
+      code: "NODE_NOT_FOUND",
+      summary: {
+        taskId: TASK_ID || null,
+        baselineRevision: BASELINE_REVISION || null,
+        parentId: PARENT_ID,
+        parentType: null,
+      },
+      issues: [
+        {
+          severity: "error",
+          message: "Parent node " + PARENT_ID + " not found",
+        },
+      ],
+    });
+  }
+
+  // Attach parent type to summary
+  const baseSummaryWithType = {
+    taskId: TASK_ID || null,
+    baselineRevision: BASELINE_REVISION || null,
+    parentId: PARENT_ID,
+    parentType: parent.type,
+  };
+
+  // ---------------------------------------------------------------------------
+  // 3. Container type check
+  // ---------------------------------------------------------------------------
+  if (EXPECTED_PARENT_TYPE && parent.type !== EXPECTED_PARENT_TYPE) {
+    return envelope({
+      ok: false,
+      code: "WRONG_PARENT_TYPE",
+      summary: baseSummaryWithType,
+      issues: [
+        {
+          severity: "error",
+          message:
+            "Expected parent type " +
+            EXPECTED_PARENT_TYPE +
+            " but got " +
+            parent.type,
+        },
+      ],
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. Children check
+  // ---------------------------------------------------------------------------
+  const childNodes = parent.children;
+  if (!childNodes || childNodes.length === 0) {
+    return envelope({
+      ok: false,
+      code: "NO_CHILDREN",
+      summary: baseSummaryWithType,
+      parent: PARENT_ID,
+      previous: { w: parent.width, h: parent.height },
+      issues: [
+        {
+          severity: "error",
+          message: "Parent " + PARENT_ID + " has no children",
+        },
+      ],
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. Negative child coordinate check
+  // ---------------------------------------------------------------------------
+  for (const child of childNodes) {
+    if (child.x < 0 || child.y < 0) {
+      return envelope({
+        ok: false,
+        code: "NEGATIVE_CHILD_COORDINATE",
+        summary: baseSummaryWithType,
+        parent: PARENT_ID,
+        previous: { w: parent.width, h: parent.height },
+        padding: { x: PAD_X, y: PAD_Y },
+        issues: [
+          {
+            severity: "error",
+            message:
+              "Child " +
+              child.id +
+              " (" +
+              child.name +
+              ") has negative coordinate x=" +
+              child.x +
+              " y=" +
+              child.y,
+          },
+        ],
+      });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // 6. Padding validation
+  // ---------------------------------------------------------------------------
+  if (
+    typeof PAD_X !== "number" ||
+    typeof PAD_Y !== "number" ||
+    !Number.isFinite(PAD_X) ||
+    !Number.isFinite(PAD_Y) ||
+    PAD_X < 0 ||
+    PAD_Y < 0
+  ) {
+    return envelope({
+      ok: false,
+      code: "INVALID_PADDING",
+      summary: baseSummaryWithType,
+      parent: PARENT_ID,
+      previous: { w: parent.width, h: parent.height },
+      padding: { x: PAD_X, y: PAD_Y },
+      issues: [
+        {
+          severity: "error",
+          message:
+            "Invalid padding: PAD_X=" +
+            PAD_X +
+            " PAD_Y=" +
+            PAD_Y +
+            " (must be non-negative finite numbers)",
+        },
+      ],
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. Compute new dimensions
+  // ---------------------------------------------------------------------------
+  let maxR = 0;
+  let maxB = 0;
+  for (const child of childNodes) {
+    const right = child.x + child.width;
+    const bottom = child.y + child.height;
+    if (right > maxR) maxR = right;
+    if (bottom > maxB) maxB = bottom;
+  }
+
   const newW = Math.ceil(maxR + PAD_X);
-  const prev = { w: sec.width, h: sec.height };
-  const result = { parent: PARENT_ID, previous: prev };
+  const newH = Math.ceil(maxB + PAD_Y);
+  const prev = { w: parent.width, h: parent.height };
+
+  // ---------------------------------------------------------------------------
+  // 8. Apply resize (fail-closed on exception)
+  // ---------------------------------------------------------------------------
   try {
-    sec.resize(newW, newH);
-    result.resized = { w: newW, h: newH };
-    result.padding = { x: PAD_X, y: PAD_Y };
+    parent.resize(newW, newH);
   } catch (e) {
-    result.error = e.message;
-    result.attempted = { w: newW, h: newH };
+    return envelope({
+      ok: false,
+      code: "RESIZE_FAILED",
+      summary: baseSummaryWithType,
+      parent: PARENT_ID,
+      previous: prev,
+      resized: null,
+      issues: [
+        {
+          severity: "error",
+          message: "resize failed: " + (e.message || String(e)),
+        },
+      ],
+    });
   }
-  return JSON.stringify(result, null, 2);
+
+  return envelope({
+    ok: true,
+    summary: baseSummaryWithType,
+    parent: PARENT_ID,
+    previous: prev,
+    resized: { w: newW, h: newH },
+    padding: { x: PAD_X, y: PAD_Y },
+  });
 })();

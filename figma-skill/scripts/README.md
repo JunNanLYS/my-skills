@@ -20,29 +20,44 @@
 |---|---|---|---|
 | `list-children.mjs`     | `PARENT_ID`, `ONLY_TYPE` | 列出 parent 全部直接子节点 (id/name/type/x/y/w/h) | Workflow 7 (Baseline Capture) |
 | `overlap-check.mjs`     | `PARENT_ID`, `OUTPUT_MODE` | AABB 相交矩阵，验证"0 overlap" | Workflow 9 / Workflow 10 |
-| `apply-layout.mjs`      | `PLANS` 数组 | 把 `{id, x, y}[]` 移动计划应用到 Figma | Workflow 8 (Fixed-Order Execution) |
-| `resize-section.mjs`    | `PARENT_ID`, `PAD_X`, `PAD_Y` | 收敛 Section / Frame 至 children bbox + padding | Workflow 8 末尾 / Workflow 9 |
+| `apply-layout.mjs`      | `PLANS`, `TASK_ID`, `BASELINE_REVISION` | 两阶段（preflight + apply with rollback）`{id, x, y}[]` 移动计划执行器。常量由 Workflow 6 CommandPlan 注入。返回 `{ok, code, summary, issues, observedAt, planned, applied, errors}` | Workflow 8 (Fixed-Order Execution) |
+| `resize-section.mjs`    | `PARENT_ID`, `EXPECTED_PARENT_TYPE`, `PAD_X`, `PAD_Y`, `TASK_ID`, `BASELINE_REVISION` | 容错收敛 Section / Frame 至 children bbox + padding。校验容器类型、拒绝负坐标。返回 `{ok, code, summary, issues, observedAt, parent, previous, resized, padding}` | Workflow 8 末尾 / Workflow 9 |
 | `figma-validate-bounds.mjs` | 命令行参数 | 离线 JSON 分析（无需 daemon），验证 bounds 合规 | Workflow 9 辅助 |
 | `install-figma-cli.ps1` | — | Windows 安装 figma-cli | Workflow 1 |
+
+## Workflow 6 CommandPlan 注入 (apply-layout / resize-section)
+
+`apply-layout.mjs` 和 `resize-section.mjs` 顶部的常量块包含空默认值：
+
+| 常量 | 脚本 | 用途 |
+|---|---|---|
+| `TASK_ID` | 两者 | 任务标识，Workflow 6 注入 |
+| `BASELINE_REVISION` | 两者 | baseline 版本戳，Workflow 6 注入 |
+| `PARENT_ID` | `resize-section.mjs` | 待调整的容器节点 ID |
+| `EXPECTED_PARENT_TYPE` | `resize-section.mjs` | 容器类型校验 (如 `"SECTION"`) |
+| `PAD_X`, `PAD_Y` | `resize-section.mjs` | 收缩 padding (px) |
+| `PLANS` | `apply-layout.mjs` | `[{id, expectedParentId?, expectedX?, expectedY?, x, y}]` |
+
+Workflow 6 的 CommandPlan 阶段负责注入这些值并在用户审批后执行。**审批未通过则不执行写入。**
 
 ## 用法速查
 
 ```bash
-# Step 1: 读 baseline (PARENT_ID 默认为 1348:47, 顶部常量按需改)
+# Step 1: 读 baseline
 figma-cli run scripts/list-children.mjs
 
-# Step 2: 离线设计新排布, 生成 plan.json (人或 agent)
+# Step 2: 离线设计新排布 (人或 agent)
 
-# Step 3: 把 plan 粘到 apply-layout.mjs 的 PLANS 常量
+# Step 3: Workflow 6 CommandPlan 注入 PLANS 后执行
 figma-cli run scripts/apply-layout.mjs
 
-# Step 4: 验证零相交 (默认 JSON 输出)
+# Step 4: 验证零相交
 figma-cli run scripts/overlap-check.mjs
 
 # Step 5: 人读版 (顶部改 OUTPUT_MODE = 'summary')
 figma-cli run scripts/overlap-check.mjs
 
-# Step 6: 收敛 Section size (基于 children bbox + padding 80x200)
+# Step 6: Workflow 6 注入 PARENT_ID / PAD_X / PAD_Y 后收敛 Section size
 figma-cli run scripts/resize-section.mjs
 ```
 
@@ -50,10 +65,35 @@ figma-cli run scripts/resize-section.mjs
 
 | 脚本 | 默认输出 | 备选 |
 |---|---|---|
-| `list-children.mjs`     | JSON `{parent, count, items[]}` | 改 `ONLY_TYPE` 只列特定 type |
-| `overlap-check.mjs`     | JSON `{total, overlapPairs, overlaps[]}` | 顶部改 `OUTPUT_MODE = 'summary'` 走文本 |
-| `apply-layout.mjs`      | JSON `{planned, applied, errors[]}` | — |
-| `resize-section.mjs`    | JSON `{parent, previous, resized, padding}` 或 `error` 字段 | — |
+| `list-children.mjs`     | JSON 信封 `{ok, code, summary, issues, observedAt, parent, count, items[]}` | 改 `ONLY_TYPE` 只列特定 type |
+| `overlap-check.mjs`     | JSON 信封 `{ok, code, summary, issues, observedAt, total, overlapPairs, overlaps[]}` | 顶部改 `OUTPUT_MODE = 'summary'` 走文本 |
+| `apply-layout.mjs`      | JSON 信封 `{ok, code, summary, issues, observedAt, planned, applied, errors[]}` | — |
+| `resize-section.mjs`    | JSON 信封 `{ok, code, summary, issues, observedAt, parent, previous, resized, padding}` | — |
+
+## 通用信封结构
+
+**所有 Figma 侧脚本** (read + write) 返回统一的 JSON 信封：
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `ok` | boolean | 操作是否成功。`false` 表示 preflight / apply / resize 任一失败 |
+| `code` | string | 机器可读的状态码（如 `OK`, `EMPTY_PLANS`, `NODE_NOT_FOUND`） |
+| `summary` | object | 摘要信息，含 `taskId`, `baselineRevision` 等 |
+| `issues` | array | `{severity, message, nodeId?}` 结构，含 error / warning / limitation |
+| `observedAt` | null | 保留字段，始终为 `null`（plugin 环境无 `Date.now()`） |
+
+此外各脚本保留自己的**传统兼容字段**（见上表 "默认输出"）。
+
+## 重要：写入脚本的 fail-closed 语义
+
+`apply-layout.mjs` 和 `resize-section.mjs` 遵循 "fail-closed" 原则：
+
+- **`ok=true` 是唯一成功信号**。脚本执行完成（无异常 throw）**不**表示 `ok=true`。调用者必须检查 `ok` 字段，而不是依赖脚本是否返回或是否输出 JSON。
+- **Preflight（apply-layout）**：写入前验证每一条 plan。任一验证失败立即返回 `ok=false`，**零写入**。
+- **Preflight 检查项**：空 PLANS / 重复 ID / 非有限坐标 / 节点不存在 / parent 不匹配 / 预期坐标漂移。
+- **Apply with rollback（apply-layout）**：按序写入。任一节点写入失败，反向回滚已写入的节点。回滚全部成功返回 `APPLY_FAILED`，回滚自身失败返回 `APPLY_ROLLBACK_FAILED`（此时部分节点可能处于已修改状态）。
+- **Fail-closed（resize-section）**：校验 `PARENT_ID` 非空、节点存在、容器类型匹配、children 非空、无负坐标、padding 合法。任一校验失败立即返回 `ok=false`。`resize()` 异常不会被静默捕获为成功。
+- **状态码 (`code`)** 反映具体失败原因，`errors[]` 包含人读的错误详情。`issues[]` 列出结构化问题条目。
 
 ## Plan 规模注意
 
