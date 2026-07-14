@@ -182,25 +182,32 @@ Checkpoint behavior:
     │   ├── index.schema.json
     │   ├── task-state.schema.json
     │   └── event.schema.json
-    └── tasks/
+    ├── tasks/
+    │   └── <task-id>/
+    │       ├── state.json
+    │       ├── lease.json
+    │       ├── plan.md
+    │       ├── todo.md
+    │       ├── recovery.md
+    │       ├── events.jsonl
+    │       └── evidence/
+    │           ├── manifest.json
+    │           ├── help/
+    │           ├── baseline/
+    │           ├── batches/
+    │           └── validation/
+    └── screenshot/
         └── <task-id>/
-            ├── state.json
-            ├── lease.json
-            ├── plan.md
-            ├── todo.md
-            ├── recovery.md
-            ├── events.jsonl
-            └── evidence/
-                ├── manifest.json
-                ├── help/
-                ├── baseline/
-                ├── batches/
-                ├── validation/
-                └── screenshots/
+            └── <temporary visual-validation files>
 ```
 
 Task IDs use the deterministic form `YYYYMMDD-<slug>`. If a collision exists,
 append `-02`, `-03`, and so on. IDs never change after task creation.
+
+Each task gets an isolated temporary screenshot directory. Screenshots exist
+only while the task is resumable and are removed during terminal-state
+archival. There is no screenshot count limit: task isolation prevents one
+active task from accumulating files in or deleting files from another task.
 
 ## 7. File Contracts
 
@@ -356,7 +363,11 @@ Required event types:
 - `REPLAN_REQUIRED`
 - `TASK_BLOCKED`
 - `TASK_FAILED`
+- `TASK_CANCELLED`
 - `TASK_COMPLETED`
+- `SCREENSHOTS_CLEANED`
+- `TASK_ARCHIVED`
+- `ARCHIVE_FAILED`
 - `LEASE_RELEASED`
 
 Events support audit and recovery diagnosis. Current state is not reconstructed
@@ -435,8 +446,14 @@ Definitions:
 - `NEEDS_REPLAN`: target, scope, dependency, structure, degradation path, or
   approval premise materially changed.
 - `FAILED`: a hard Gate or correction limit produced a terminal failure.
+- `CANCELLED`: the user explicitly ended the task before completion.
 - `COMPLETED`: Workflow 11 evidence and delivery completed.
 - `SUPERSEDED`: another task or plan replaced this task.
+
+Terminal task outcome and archival state are independent. `status` preserves
+why the task ended, while `archiveStatus` is one of `NOT_ARCHIVED`,
+`ARCHIVING`, `ARCHIVED`, or `ARCHIVE_FAILED`. A terminal task is not fully
+reclaimed until `archiveStatus=ARCHIVED`.
 
 ### 8.2 Live observation classifications
 
@@ -546,8 +563,13 @@ todo-update
 evidence-add
 validate
 release
+archive
 close
 ```
+
+`archive` performs terminal-state summary generation, task-scoped screenshot
+cleanup, runtime-material compaction, residue verification, and archive-state
+transition. `close` refuses to finalize a terminal task unless archival passes.
 
 Command requirements:
 
@@ -681,11 +703,51 @@ Workflow 9 FINDINGS → record evidence → Workflow 11
 
 A read-only task never reaches Workflow 6, 8, or 10.
 
-### 12.8 Workflow 11 — Checkpointed Delivery
+### 12.8 Workflow 11 — Checkpointed Delivery and Reclamation
+
+Workflow 11 first produces the delivery result and terminal outcome, then runs
+a mandatory reclamation transaction for every terminal status:
+`COMPLETED`, `FAILED`, `CANCELLED`, or `SUPERSEDED`.
+
+The transaction order is fixed:
+
+```text
+1. freeze further task and Figma writes
+2. generate final-summary.md
+3. write final plan, Todo, state, and evidence-index snapshots
+4. convert screenshot observations into durable textual validation findings
+5. recursively delete .figma/screenshot/<task-id>/
+6. verify that the task screenshot directory is absent or contains zero files
+7. remove lease.json, temporary files, intermediate batch output, reproducible
+   baselines, and non-key command output
+8. reduce evidence/manifest.json to retained key-evidence references
+9. append SCREENSHOTS_CLEANED and TASK_ARCHIVED events
+10. set archiveStatus=ARCHIVED while preserving the terminal status
+11. validate the complete .figma directory
+```
+
+`final-summary.md` retains the task goal, final outcome, implemented or audited
+changes, final validation conclusions, screenshot count and visual findings,
+correction history, unresolved issues, deleted-material summary, and links to
+related or superseding tasks. Raw screenshots are temporary and are never a
+required long-term artifact after their observations have been summarized.
+
+If screenshot deletion or any later reclamation step fails, set
+`archiveStatus=ARCHIVE_FAILED`, append `ARCHIVE_FAILED`, and do not claim that
+the task was fully reclaimed. `BLOCKED`, `STALE`, and `NEEDS_REPLAN` remain
+resumable and therefore retain their isolated screenshot directories.
 
 The delivery report references task ID, final revision, plan version, Todo
-summary, evidence manifest, correction rounds, unresolved issues, and lease
-release. `COMPLETED` requires a valid final checkpoint and released lease.
+summary, retained evidence manifest, correction rounds, unresolved issues,
+terminal status, archive status, screenshot deletion count, and lease release.
+A completed task is fully closed only after its terminal checkpoint, screenshot
+residue check, archive validation, and lease release all pass.
+
+Because checkpoint Git commits are not automatic, the normal final commit does
+not contain task screenshots: Workflow 11 removes them before delivery commit.
+If a human previously committed screenshots during an active task, later
+reclamation removes them from the current tree but does not rewrite Git
+history.
 
 ## 13. Unified Eval/Run Contract
 
@@ -932,12 +994,21 @@ Before `.figma/` content is written or committed:
 - avoid complete process or environment dumps;
 - refuse evidence paths outside the task directory;
 - compute the evidence digest after redaction;
+- append `ARCHIVE_FAILED`, preserve diagnostic state, and block final close when
+  task-scoped screenshot or runtime-material cleanup fails;
 - report a redaction failure as `SENSITIVE_DATA_REJECTED` and block the
   checkpoint.
 
-Binary screenshots are allowed because all task evidence is tracked, but the
-implementation plan must define a project-configurable size limit and a clear
-failure response when the limit is exceeded.
+Screenshots use `.figma/screenshot/<task-id>/`, are isolated by task, and have
+no count limit. They remain available while a task is resumable, then are
+summarized and deleted for every terminal task. The archive validator requires
+zero remaining files for that task. Screenshots from other task IDs must never
+be deleted by the current task's reclamation transaction.
+
+Binary screenshots may exist in the tracked working tree during an active task,
+but the normal delivery commit occurs only after terminal cleanup. The
+implementation must test deletion isolation and residue detection rather than
+defining a numeric screenshot-retention threshold.
 
 ## 19. Data Versioning and Migration
 
@@ -969,8 +1040,13 @@ Version 2.0 may ship only when all conditions pass:
 13. RED/GREEN fresh-context evidence is recorded;
 14. the cross-session E2E recovery exercise passes;
 15. `SKILL.md` is reduced and has no duplicate authority;
-16. all deterministic regression tests pass;
-17. the runtime skill snapshot is synchronized and re-verified.
+16. every terminal status generates `final-summary.md`, removes only its own
+    `.figma/screenshot/<task-id>/`, verifies zero residue, and reaches
+    `archiveStatus=ARCHIVED`;
+17. archive failure preserves the terminal outcome, records diagnostics, and
+    blocks final close;
+18. all deterministic regression tests pass;
+19. the runtime skill snapshot is synchronized and re-verified.
 
 ## 21. Implementation Decomposition
 
@@ -1008,4 +1084,13 @@ The user approved the following decisions during design review:
 - the hybrid checkpoint-ledger architecture is used;
 - the release is version 2.0;
 - the invariant, file-contract, lifecycle, workflow-hardening, state-helper,
-  error-handling, and testing design sections were approved.
+  error-handling, and testing design sections were approved;
+- terminal tasks use compressed archival rather than full retention or complete
+  task-directory deletion;
+- screenshots are isolated under `.figma/screenshot/<task-id>/`;
+- screenshots have no numeric count limit and are deleted when the owning task
+  enters any terminal state;
+- `COMPLETED`, `FAILED`, `CANCELLED`, and `SUPERSEDED` all run summary,
+  screenshot cleanup, residue verification, and compressed archival;
+- `BLOCKED`, `STALE`, and `NEEDS_REPLAN` retain screenshots because they remain
+  resumable.
