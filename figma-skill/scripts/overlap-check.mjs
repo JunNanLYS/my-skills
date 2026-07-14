@@ -1,61 +1,181 @@
 // figma-helpers/overlap-check.mjs
 //
-// AABB 相交矩阵: 检查 parent 内所有直接子节点两两之间的 bounding box 相交。
-// 0 相交 => 排布通过 Workflow 9 的 Geometry 验证门禁。
+// AABB intersection matrix across one or more parent nodes.
+// Checks all direct children pair-wise using absoluteBoundingBox when
+// available, falling back to local geometry.  Uses strict inequalities so
+// edge-touching is NOT considered overlap.  Returns the common envelope
+// { ok, code, summary, issues, observedAt, total, overlapPairs, overlaps }.
 //
-// 用法 (figma-cli run 不透传参数, 因此调用前改 PARENT_ID; 输出模式改 OUTPUT_MODE):
+// Usage:
+//   1. Set PARENT_IDS (array of node IDs) to scope the check
+//   2. figma-cli run scripts/overlap-check.mjs
 //
-//   1. 编辑第 14 行的 PARENT_ID
-//   2. figma-cli run scripts/figma-helpers/overlap-check.mjs
-//
-// OUTPUT_MODE: 'json' (默认, 机器消费) | 'summary' (人读, 文本行)
-// 也可在文件末尾调整 ADD_BOX 决定 summary 是否带 bbox 摘要行。
+// OUTPUT_MODE: 'json' (default, machine) | 'summary' (human-readable text)
 
-(function () {
-  const PARENT_ID = '1348:47';
-  const OUTPUT_MODE = 'json';
+(async function () {
+  // ===== 在这里改 =====
+  const PARENT_IDS = [];
+  const OUTPUT_MODE = "json";
+  // ====================
 
-  const sec = figma.getNodeById(PARENT_ID);
-  if (!sec) throw new Error('overlap-check: 找不到 parent ' + PARENT_ID);
+  const issues = [];
+  const allItems = [];
+  const allPairs = [];
 
-  const items = [];
-  for (const c of sec.children) {
-    items.push({
-      id: c.id,
-      name: c.name,
-      type: c.type,
-      x: c.x, y: c.y,
-      w: c.width, h: c.height,
-      r: c.x + c.width,
-      b: c.y + c.height,
-    });
-  }
-  const pairs = [];
-  for (let i = 0; i < items.length; i++) {
-    for (let j = i + 1; j < items.length; j++) {
-      const a = items[i], b = items[j];
-      if ((a.x < b.r) && (b.x < a.r) && (a.y < b.b) && (b.y < a.b)) {
-        pairs.push({
-          a: a.name + ' (' + a.id + ')',
-          aBox: [a.x, a.y, a.r, a.b],
-          b: b.name + ' (' + b.id + ')',
-          bBox: [b.x, b.y, b.r, b.b],
+  for (const parentId of PARENT_IDS) {
+    const parent = await figma.getNodeByIdAsync(parentId);
+    if (!parent) {
+      issues.push({
+        severity: "error",
+        message: "Parent " + parentId + " not found",
+        parentId: parentId,
+      });
+      continue;
+    }
+    if (!("children" in parent)) {
+      issues.push({
+        severity: "warning",
+        message:
+          "Node " + parentId + " (" + parent.type + ") has no children",
+        parentId: parentId,
+        type: parent.type,
+      });
+      continue;
+    }
+
+    const items = [];
+    for (const c of parent.children) {
+      const bbox = c.absoluteBoundingBox;
+      if (bbox) {
+        items.push({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          x: bbox.x,
+          y: bbox.y,
+          width: bbox.width,
+          height: bbox.height,
+          right: bbox.x + bbox.width,
+          bottom: bbox.y + bbox.height,
+          source: "absoluteBoundingBox",
+          parentId: parentId,
         });
+      } else {
+        issues.push({
+          severity: "limitation",
+          message:
+            "Node " +
+            c.id +
+            " (" +
+            c.name +
+            ") lacks absoluteBoundingBox, using local geometry",
+          nodeId: c.id,
+          parentId: parentId,
+        });
+        items.push({
+          id: c.id,
+          name: c.name,
+          type: c.type,
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+          right: c.x + c.width,
+          bottom: c.y + c.height,
+          source: "local",
+          parentId: parentId,
+        });
+      }
+    }
+    allItems.push(...items);
+
+    // Pairwise intersection within this parent (strict inequalities)
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const a = items[i];
+        const b = items[j];
+        if (
+          a.x < b.right &&
+          b.x < a.right &&
+          a.y < b.bottom &&
+          b.y < a.bottom
+        ) {
+          allPairs.push({
+            parentId: parentId,
+            a: a.name + " (" + a.id + ")",
+            aBox: [a.x, a.y, a.right, a.bottom],
+            aSource: a.source,
+            b: b.name + " (" + b.id + ")",
+            bBox: [b.x, b.y, b.right, b.bottom],
+            bSource: b.source,
+          });
+        }
       }
     }
   }
 
-  if (OUTPUT_MODE === 'summary') {
-    if (pairs.length === 0) return 'Total: ' + items.length + ' children, 0 overlap pairs';
-    const lines = ['Total: ' + items.length + ' children, ' + pairs.length + ' overlap pairs'];
-    for (const ov of pairs) {
-      lines.push('--');
-      lines.push('A: ' + ov.a);
-      lines.push('   box: x=' + ov.aBox[0] + ' y=' + ov.aBox[1] + ' w=' + (ov.aBox[2] - ov.aBox[0]) + ' h=' + (ov.aBox[3] - ov.aBox[1]));
-      lines.push('B: ' + ov.b);
-      lines.push('   box: x=' + ov.bBox[0] + ' y=' + ov.bBox[1] + ' w=' + (ov.bBox[2] - ov.bBox[0]) + ' h=' + (ov.bBox[3] - ov.bBox[1]));
+  if (OUTPUT_MODE === "summary") {
+    if (allPairs.length === 0) {
+      return (
+        "Total: " +
+        allItems.length +
+        " children across " +
+        PARENT_IDS.length +
+        " parents, 0 overlap pairs"
+      );
     }
-    return lines.join('\n');
+    const lines = [
+      "Total: " +
+        allItems.length +
+        " children, " +
+        allPairs.length +
+        " overlap pairs",
+    ];
+    for (const ov of allPairs) {
+      lines.push("--");
+      lines.push("Parent: " + ov.parentId);
+      lines.push("A: " + ov.a);
+      lines.push(
+        "   box: x=" +
+          ov.aBox[0] +
+          " y=" +
+          ov.aBox[1] +
+          " w=" +
+          (ov.aBox[2] - ov.aBox[0]) +
+          " h=" +
+          (ov.aBox[3] - ov.aBox[1]),
+      );
+      lines.push("B: " + ov.b);
+      lines.push(
+        "   box: x=" +
+          ov.bBox[0] +
+          " y=" +
+          ov.bBox[1] +
+          " w=" +
+          (ov.bBox[2] - ov.bBox[0]) +
+          " h=" +
+          (ov.bBox[3] - ov.bBox[1]),
+      );
+    }
+    return lines.join("\n");
   }
-  return JSON.stringify({ total: items.length, overlapPairs: pairs.length, overlaps: pairs }, null, 2);
+
+  return JSON.stringify(
+    {
+      ok: true,
+      code: "OK",
+      summary: {
+        parents: PARENT_IDS.length,
+        totalItems: allItems.length,
+        overlapPairs: allPairs.length,
+      },
+      issues: issues,
+      observedAt: null,
+      total: allItems.length,
+      overlapPairs: allPairs.length,
+      overlaps: allPairs,
+    },
+    null,
+    2,
+  );
 })();
