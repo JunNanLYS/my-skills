@@ -209,6 +209,18 @@ function checkpointLocked(projectRoot, params) {
     nextState,
   });
 
+  // Require evidence for terminal status transitions (except TASK_FAILED).
+  if (TERMINAL_STATUSES.includes(nextStatus) && event.type !== "TASK_FAILED") {
+    const hasEvidence = Array.isArray(event.evidence) && event.evidence.length > 0;
+    if (!hasEvidence) {
+      throw new TaskStateError(
+        "EVIDENCE_MISSING",
+        `terminal status transition to ${nextStatus} requires at least one evidence reference`,
+        { nextStatus, eventType: event.type },
+      );
+    }
+  }
+
   const recoveryPatch = recovery?.nextAction
     ? {
         resume: {

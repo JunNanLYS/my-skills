@@ -28,6 +28,13 @@ import { acquireLease, renewLease, releaseLease, takeoverLease } from "./lib/tas
 import { runAcquireLease, runRenewLease, runTakeoverLease, runReleaseLease } from "./lib/task-state/lease-commands.mjs";
 import { runCheckpoint } from "./lib/task-state/checkpoint-commands.mjs";
 import {
+  parseTodoDocument,
+  renderTodoDocument,
+  registerEvidence,
+  registerScreenshot,
+  validateProjectLedger,
+} from "./lib/task-state/evidence.mjs";
+import {
   atomicWriteJson,
   atomicWriteText,
   resolveInsideProject,
@@ -641,6 +648,59 @@ function showTask({ projectRoot, flags, json }) {
   };
 }
 
+function evidenceAdd({ projectRoot, flags, json }) {
+  const taskId = requireFlag(flags, "task");
+  const kind = requireFlag(flags, "kind");
+  const command = requireFlag(flags, "command");
+  const workflow = requireFlag(flags, "workflow");
+  const payloadPath = requireFlag(flags, "payload");
+  const filename = requireFlag(flags, "filename");
+  const payload = readFileSync(resolve(projectRoot, payloadPath), "utf8");
+  const entry = registerEvidence(projectRoot, {
+    taskId,
+    kind,
+    command,
+    workflow,
+    payload,
+    filename,
+    now: flags.now && flags.now !== true ? flags.now : undefined,
+  });
+  return {
+    envelope: { ok: true, command: "evidence-add", data: { entry } },
+    json,
+  };
+}
+
+function screenshotAdd({ projectRoot, flags, json }) {
+  const taskId = requireFlag(flags, "task");
+  const filePath = requireFlag(flags, "file");
+  const page = requireFlag(flags, "page");
+  const nodeIdsRaw = requireFlag(flags, "node-ids");
+  const nodeIds = JSON.parse(nodeIdsRaw);
+  const viewport = flags.viewport && flags.viewport !== true ? flags.viewport : null;
+  const entry = registerScreenshot(projectRoot, {
+    taskId,
+    filePath,
+    page,
+    nodeIds,
+    viewport,
+    now: flags.now && flags.now !== true ? flags.now : undefined,
+  });
+  return {
+    envelope: { ok: true, command: "screenshot-add", data: { entry } },
+    json,
+  };
+}
+
+function validateLedger({ projectRoot, json }) {
+  const issues = validateProjectLedger(projectRoot);
+  const valid = issues.length === 0;
+  return {
+    envelope: { ok: true, command: "validate", data: { valid, issues } },
+    json,
+  };
+}
+
 function runCommand(name, runner) {
   const args = parseArgs(process.argv.slice(2));
   const json = args.flags.json === true;
@@ -760,6 +820,25 @@ function humanOutput(envelope) {
     process.stdout.write(`checkpoint ${s.taskId} status=${s.status} workflow=${s.currentWorkflow} revision=${s.revision}\n`);
     return;
   }
+  if (envelope.command === "evidence-add") {
+    process.stdout.write(`evidence ${data.entry.id} kind=${data.entry.kind} sha256=${data.entry.sha256}\n`);
+    return;
+  }
+  if (envelope.command === "screenshot-add") {
+    process.stdout.write(`screenshot ${data.entry.id} page=${data.entry.Page}\n`);
+    return;
+  }
+  if (envelope.command === "validate") {
+    if (data.valid) {
+      process.stdout.write("ledger is valid\n");
+    } else {
+      process.stdout.write(`ledger has ${data.issues.length} issue(s)\n`);
+      for (const issue of data.issues) {
+        process.stdout.write(`  ${issue.severity}: [${issue.code}] ${issue.message}\n`);
+      }
+    }
+    return;
+  }
   process.stdout.write(JSON.stringify(envelope, null, 2) + "\n");
 }
 
@@ -814,9 +893,24 @@ function dispatch(args) {
         runCheckpoint({ projectRoot, flags, json }),
       );
       return;
+    case "evidence-add":
+      runCommand("evidence-add", ({ projectRoot, flags, json }) =>
+        evidenceAdd({ projectRoot, flags, json }),
+      );
+      return;
+    case "screenshot-add":
+      runCommand("screenshot-add", ({ projectRoot, flags, json }) =>
+        screenshotAdd({ projectRoot, flags, json }),
+      );
+      return;
+    case "validate":
+      runCommand("validate", ({ projectRoot, json }) =>
+        validateLedger({ projectRoot, json }),
+      );
+      return;
     default:
       process.stderr.write(
-        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\n`,
+        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint|evidence-add|screenshot-add|validate> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\n`,
       );
       process.exit(2);
   }
