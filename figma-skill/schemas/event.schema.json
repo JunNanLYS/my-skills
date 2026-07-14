@@ -50,7 +50,20 @@
     "actor": { "type": "string", "minLength": 1 },
     "at": { "type": "string", "format": "date-time" },
     "evidence": { "type": "array", "items": { "type": "string" } },
-    "details": { "$ref": "#/$defs/eventDetails" }
+    "taskStatuses": [
+      "DRAFT",
+      "WAITING_DESIGN_APPROVAL",
+      "WAITING_WRITE_APPROVAL",
+      "READY",
+      "ACTIVE",
+      "BLOCKED",
+      "STALE",
+      "NEEDS_REPLAN",
+      "FAILED",
+      "CANCELLED",
+      "COMPLETED",
+      "SUPERSEDED"
+    ]
   },
   "$defs": {
     "eventDetails": {
@@ -89,10 +102,12 @@
         },
         "priorStatus": {
           "type": "string",
+          "enum": ["DRAFT", "WAITING_DESIGN_APPROVAL", "WAITING_WRITE_APPROVAL", "READY", "ACTIVE", "BLOCKED", "STALE", "NEEDS_REPLAN", "FAILED", "CANCELLED", "COMPLETED", "SUPERSEDED"],
           "description": "Prior task status (APPROVAL_RECORDED, WORKFLOW_ENTERED, TASK_ARCHIVED)"
         },
         "nextStatus": {
           "type": "string",
+          "enum": ["DRAFT", "WAITING_DESIGN_APPROVAL", "WAITING_WRITE_APPROVAL", "READY", "ACTIVE", "BLOCKED", "STALE", "NEEDS_REPLAN", "FAILED", "CANCELLED", "COMPLETED", "SUPERSEDED"],
           "description": "Next task status (APPROVAL_RECORDED)"
         },
         "priorWorkflow": {

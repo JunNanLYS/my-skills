@@ -342,3 +342,55 @@ test("published JSON schemas declare strict draft 2020-12 object contracts", () 
     assert.equal(schema.properties.schemaVersion.const, 1, filename);
   }
 });
+
+test("event.schema.json priorStatus and nextStatus expose exactly TASK_STATUSES", () => {
+  const schema = JSON.parse(readFileSync(join(root, "schemas", "event.schema.json"), "utf8"));
+  const priorStatus = schema.$defs.eventDetails.properties.priorStatus;
+  const nextStatus = schema.$defs.eventDetails.properties.nextStatus;
+
+  // Both fields must be present and typed as string with enum
+  assert.ok(priorStatus, "priorStatus must exist in $defs.eventDetails.properties");
+  assert.ok(nextStatus, "nextStatus must exist in $defs.eventDetails.properties");
+  assert.equal(priorStatus.type, "string", "priorStatus must be type string");
+  assert.equal(nextStatus.type, "string", "nextStatus must be type string");
+
+  // Enum must exist and contain exactly the TASK_STATUSES values
+  assert.ok(Array.isArray(priorStatus.enum), "priorStatus must have enum array");
+  assert.ok(Array.isArray(nextStatus.enum), "nextStatus must have enum array");
+
+  // Set comparison: schema enum should match TASK_STATUSES exactly
+  assert.deepEqual(
+    new Set(priorStatus.enum),
+    new Set(TASK_STATUSES),
+    "priorStatus enum must match TASK_STATUSES exactly",
+  );
+  assert.deepEqual(
+    new Set(nextStatus.enum),
+    new Set(TASK_STATUSES),
+    "nextStatus enum must match TASK_STATUSES exactly",
+  );
+});
+
+test("runtime rejects invalid status values in event.details priorStatus and nextStatus", () => {
+  const invalidStatuses = ["INVALID_STATUS", "done", "COMPLETE", "unknown"];
+
+  for (const invalidStatus of invalidStatuses) {
+    assertStateInvalid(() =>
+      assertValidEvent({
+        ...validEvent,
+        type: "APPROVAL_RECORDED",
+        details: { priorStatus: invalidStatus, nextStatus: "DRAFT" },
+      }),
+      `invalid priorStatus: ${invalidStatus}`,
+    );
+
+    assertStateInvalid(() =>
+      assertValidEvent({
+        ...validEvent,
+        type: "APPROVAL_RECORDED",
+        details: { priorStatus: "DRAFT", nextStatus: invalidStatus },
+      }),
+      `invalid nextStatus: ${invalidStatus}`,
+    );
+  }
+});
