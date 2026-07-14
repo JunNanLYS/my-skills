@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const read = (name) => readFileSync(join(root, name), "utf8");
+const read = (name) => readFileSync(join(root, name), "utf8").replace(/\r\n/g, "\n");
 const required = [
   "SKILL.md",
   "references/installation.md",
@@ -59,7 +59,7 @@ for (const phrase of [
 
 const runtimeMarkdown = required
   .filter((file) => file.endsWith(".md"))
-  .map(read)
+  .map((name) => read(name))
   .join("\n");
 assert.doesNotMatch(runtimeMarkdown, /\.figma\/cache\.json/);
 assert.doesNotMatch(runtimeMarkdown, /figma-guide/);

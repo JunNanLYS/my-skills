@@ -1,154 +1,69 @@
-# Naming and Workflow Coverage
+# v2.0 Naming, Workflow and Validator Traceability
 
-## v1.2.4 Geometry Verifier Strict Traceability
+This file maps the v2.0 specification (`docs/superpowers/specs/2026-07-14-figma-skill-v2-persistent-task-state-design.md`) to the committed runtime and the deterministic tests. It does **not** cite mutable SKILL.md line numbers; instead it references stable heading anchors, exported interface names, schema file names, and test functions.
 
-| Spec section                            | Implemented at                                                  | Marker                                                                 |
-|-----------------------------------------|-----------------------------------------------------------------|------------------------------------------------------------------------|
-| §3.1 Workflow 9 three-gate order        | figma-skill/SKILL.md: ### Workflow 9                            | `figma-cli lint --json` → `figma-cli unstack --dry-run` → `scripts/overlap-check.mjs` |
-| §3.2 Workflow 10 verifier-aware loop   | figma-skill/SKILL.md: ### Workflow 10                           | `overlap-check.mjs` / `unstack --dry-run` / `inspect --json` correction paths |
-| §3.3 Workflow 11 GeometryVerifierPipeline | figma-skill/SKILL.md: ### Workflow 11                          | `GeometryVerifierPipeline:` field + 未提交即 `FinalStatus=FAILED` 规则    |
-| §3.4 Workflow 6 OverlapCheck split      | figma-skill/SKILL.md: ### Workflow 6                            | `LintEvidence` / `UnstackEvidence` / `OverlapCheckEvidence` 三段         |
-| §3.5 NNR eval/run gate exemption        | figma-skill/SKILL.md: ## Non-Negotiable Rules                   | scripts/ + 4 个 mjs 名字列入豁免规则                                       |
-| §3.6 Workflow 7 list-children baseline  | figma-skill/SKILL.md: ### Workflow 7                            | `list-children.mjs` baseline 4 步                                          |
-| §3.7 Workflow 8 apply-layout / resize   | figma-skill/SKILL.md: ### Workflow 8                            | `apply-layout.mjs` / `resize-section.mjs` + PLANS / PAD_X / PAD_Y        |
-| §4 references/execution.md decision table | figma-skill/references/execution.md: ## Geometry-aware Commands | 9 条命令表 (lint / unstack / canvas info / canvas next / inspect / 4 mjs) |
-| §5 references/geometry-verifier.md new  | figma-skill/references/geometry-verifier.md                    | 4 闸门 + 4 矩阵名 + 失败处理优先级                                            |
-| §6 validator assertGeometryVerifierStrict | figma-skill/tests/validate-skill.mjs: assertGeometryVerifierStrict | 11 assertions (W9 / W10 / W11 / NNR / W7 / W8 / execution.md / geometry-verifier.md / scripts dir) |
-| §7 S15 multi-step scenarios              | figma-skill/tests/scenarios.md                                 | S15.1 / S15.2 / S15.3 三步子场景                                              |
-| §7 expected-behaviors                    | figma-skill/tests/expected-behaviors.md                        | S15.1 / S15.2 / S15.3 rows                                                |
-| §10 v1.2.4 version bump                 | figma-skill/SKILL.md frontmatter                               | `version: 1.2.4`                                                          |
+## 1. Headings & Single Authority
 
-## v1.2.3 Help Discovery Gate Traceability
+| Spec Section | Runtime Authority | Marker |
+| --- | --- | --- |
+| §2 `state.json` canonical shape | `figma-skill/scripts/lib/task-state/model.mjs` (`TASK_STATUSES`, `TERMINAL_STATUSES`, `WRITE_REQUIRED_WORKFLOWS = Object.freeze(['6','8','10'])`, `ARCHIVE_STATUSES`, `EVENT_TYPES`, `TRANSITIONS`) | `tests/task-state-schema.test.mjs` keeps these arrays aligned with `schemas/task-state.schema.json` and `schemas/event.schema.json` |
+| §5.4 Lease contract | `figma-skill/scripts/lib/task-state/lease.mjs` (`assertLeaseShape`, mode `WRITE`, exact key set) | `tests/task-state-lease.test.mjs` |
+| §10 Checkpoint transaction | `figma-skill/scripts/lib/task-state/checkpoint.mjs` (lease → revision → transition → event → state → index → heartbeat, byte-for-byte snapshot/rollback) | `tests/task-state-checkpoint.test.mjs`, `tests/task-state-archive.test.mjs` |
+| §11 `.figma/` CLI surface | `figma-skill/scripts/figma-task-state.mjs` (subcommands: `init-project`, `create`, `list`, `show`, `acquire`, `renew`, `takeover`, `release`, `checkpoint`, `todo-add`, `todo-update`, `evidence-add`, `screenshot-add`, `validate`, `archive`, `close`) | `tests/task-state-cli.test.mjs` |
+| Naming grammar | `figma-skill/references/naming.md` (single authority) | `tests/naming-and-workflow.test.mjs` |
+| Planning + Workflow 6 plan template | `figma-skill/references/planning.md` | covered by deterministic references routing, not a behavioural test |
+| State + recovery + Mermaid | `figma-skill/references/state-and-recovery.md` | `tests/workflow-contract.test.mjs` (parses mermaid block, asserts Mermaid edges ≥ transitions) |
+| Execution contract | `figma-skill/references/execution.md` (six-field eval/run, `figma-task-state.mjs` exemption, Geometry-aware Commands, `unstack --dry-run` semantics) | `tests/workflow-contract.test.mjs` (six fields, unstack labelled duplicate-origin only) |
+| Geometry Verifier | `figma-skill/references/geometry-verifier.md` (`Lint → Duplicate-Origin → Top-Level AABB → Scoped Children AABB → Variant Parity → Visual`) | `tests/workflow-contract.test.mjs` (asserts ordered gates; `tests/figma-read-helpers.test.mjs` + `tests/figma-write-helpers.test.mjs` exercise actual scripts) |
+| Validation & delivery | `figma-skill/references/validation.md` (three layers, terminal reclamation gate) | deterministic references routing |
+| Installation & Yolo Connection Gate | `figma-skill/references/installation.md` (singular environment order) | `tests/workflow-contract.test.mjs` (asserts `--version → --help → status → connect` ordering) |
+| Design system authority | `figma-skill/references/design-system.md` | routed via Mandatory Lookups in SKILL.md |
 
-| Spec section                                  | Implemented at                                                | Marker                                                                 |
-|-----------------------------------------------|---------------------------------------------------------------|------------------------------------------------------------------------|
-| Section 3 — NNR first-use --help             | figma-skill/SKILL.md: ## Non-Negotiable Rules                | "禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令"               |
-| Section 3 — NNR non-CLI runtime gate          | figma-skill/SKILL.md: ## Non-Negotiable Rules                | "figma-cli 之外的运行时" + 6-field EvalRunFallback reference           |
-| Section 4 — Help Discovery Gate chapter       | figma-skill/SKILL.md: ## Help Discovery Gate                 | Chapter heading + 4 forbidden lines                                    |
-| Section 5 — Workflow 8 batch help lookup      | figma-skill/SKILL.md: ### Workflow 8                         | "figma-cli <command> --help" + recursive subcommand bullet            |
-| Section 6 — Workflow 11 HelpEvidence          | figma-skill/SKILL.md: ### Workflow 11                        | "HelpEvidence" field with one-line --help excerpt per command          |
-| Section 7 — Red Flags +4                     | figma-skill/SKILL.md: ## Red Flags — Stop                    | "上次用过这个命令" / "参数我背得出来" / "这个命令很常见" / "figma-cli 没这个能力，写个脚本就行。" |
-| Section 8 — execution.md Command Truth        | figma-skill/references/execution.md: ## Command Truth         | recursive --help + non-CLI runtime gate paragraph                      |
-| Section 9 — validator assertHelpDiscoveryGate | figma-skill/tests/validate-skill.mjs                         | 6 assertions (NNR, chapter, W8, W11, Red Flag, execution.md)         |
-| Section 10 — S2 evidence cell                 | figma-skill/tests/expected-behaviors.md: S2 row              | "first-use --help lookup confirmed for the chosen command"            |
+## 2. Mandatory Lookups Routing (Workflow → authority)
 
-## v1.2.1 Connect-Status + Specimen Reduction Traceability
+| Phase | Authority | Test method |
+| --- | --- | --- |
+| Workflow 1 (environment) | `references/installation.md` | `assertConnectOrder` in `tests/validate-skill.mjs` |
+| Workflow 2 / 4G (design system) | `references/design-system.md` | routing in `tests/workflow-contract.test.mjs` |
+| Workflow 0A / 4A–4H / 6 / 9–11 (discovery / plan / approval) | `references/planning.md` | routing in `tests/workflow-contract.test.mjs` |
+| Workflow 6 / 7 / 8 (writes) | `references/execution.md` | six-field contract test |
+| Workflow 9 / 10 (geometry verification) | `references/geometry-verifier.md` | ordered-gate test |
+| Workflow 11 (delivery / terminal reclaim) | `references/validation.md` | archive-status test in `tests/task-state-archive.test.mjs` |
+| Any phase, naming | `references/naming.md` | `tests/naming-and-workflow.test.mjs` |
+| Any phase, persistence | `references/state-and-recovery.md` | `tests/workflow-contract.test.mjs` mermaid parser |
 
-| Spec part / section                              | Implemented at                                                | Marker                                                                    |
-|--------------------------------------------------|---------------------------------------------------------------|---------------------------------------------------------------------------|
-| Part I.3 — Workflow 1 status-first sequence      | figma-skill/SKILL.md: Workflow 1                               | 6 步顺序 + "禁止在 status 之前调用 connect"                                |
-| Part I.5 — Yolo Connection Gate rewritten         | figma-skill/references/installation.md: Yolo Connection Gate   | 4 步顺序 + 末尾 "任何情况下禁止自动调用 daemon restart"                    |
-| Part I, validator assertion 3                     | figma-skill/SKILL.md: Workflow 1                               | "daemon restart" literal in Workflow 1 block                              |
-| Part I, validator assertion 5 (negative)          | figma-skill/references/installation.md                        | no `## Concurrent Agent Connection` heading                               |
-| Part II.3 — Workflow 4A specimen count 4→1       | figma-skill/SKILL.md: Workflow 4A                              | "Specimen/StateGallery" only, contains all variants                        |
-| Part II.4 — validator removes three Specimens     | figma-skill/tests/validate-skill.mjs: assertNamingAndWorkflow | only Specimen/StateGallery listed; VariantMatrix/Properties/Usage removed  |
-| Part III.1 — validator adds Connect-Status Gate   | figma-skill/tests/validate-skill.mjs: assertConnectStatusGate | 5 assertions (status-before-connect, prohibition, daemon-restart, status-first Yolo, negative assertion) |
-| Part III.2 — validator keeps StateGallery        | figma-skill/tests/validate-skill.mjs                          | Specimen/StateGallery in marker list                                      |
+## 3. Deterministic Test Suite
 
-## v1.2 Geometry & Placement Mandates Traceability
+| File | Coverage |
+| --- | --- |
+| `tests/task-state-schema.test.mjs` | Strict schema ↔ model parity, including `event.details.priorStatus` / `nextStatus` enum coverage |
+| `tests/task-state-cli.test.mjs` | `init-project` (idempotent, fail-closed, schema mismatch), `create` (semantic slug + collision), `list`, `show` (malformed/invalid-input fail closed), `validate` |
+| `tests/task-state-lease.test.mjs` | Expiry / renewal / takeover / `LEASE_LOST` / event-write rollback / E-#### monotonic IDs |
+| `tests/task-state-checkpoint.test.mjs` | `COMPLETED` requires evidence, `TODO_UPDATED` recognition, lease + checkpoint gates, revision-after-success |
+| `tests/task-state-archive.test.mjs` | Terminal cleanup, archive-status transitions, screenshot isolation, lease retention, `ARCHIVE_FAILED` |
+| `tests/task-state-evidence.test.mjs` | Redaction + SHA-256 + monotonic `EV-####` IDs + screenshot containment |
+| `tests/figma-read-helpers.test.mjs` | Empty `PARENT_ID` / `PARENT_IDS`, limitation issues, strict inequality, common envelope |
+| `tests/figma-write-helpers.test.mjs` | `PLANS` / `BASELINE_REVISION` / `PARENT_ID` defaults, preflight, reverse rollback, common envelope |
+| `tests/figma-validate-bounds.test.mjs` | Missing references, negative dims, root mismatch, config/figma-json exclusion |
+| `tests/install-figma-cli.Tests.ps1` | InstallRoot validation, SHA-256 mismatch rejection, source-fallback plan |
+| `tests/naming-and-workflow.test.mjs` | Naming authority + Workflow routing + Task types + Geometry keywords |
+| `tests/workflow-contract.test.mjs` | v2 routing, gates, eval/run fields, screenshot path, mermaid, status transition contract |
+| `tests/validate-skill.mjs` | Required files + v2 wording + scenario coverage + SKILL.md size budget |
 
-| Spec section                                     | Implemented at                  | Marker                                                                 |
-|--------------------------------------------------|---------------------------------|------------------------------------------------------------------------|
-| Section 3 — Visual-Overlap Rules                 | figma-skill/SKILL.md:223        | Workflow 4A overlap sub-steps                                          |
-| Section 3 — Screen placement                     | figma-skill/SKILL.md:243        | Workflow 4D overlap sub-steps                                          |
-| Section 3 — Flow connector placement             | figma-skill/SKILL.md:258        | Workflow 4F magnet-from-geometry                                       |
-| Section 4 — Geometry Family A (Auto Layout)      | figma-skill/SKILL.md:534        | `### Auto Layout Mode Selection`                                       |
-| Section 4 — Geometry Family B (Fixed Parent)     | figma-skill/SKILL.md:540        | `### Fixed Parent Clipping`                                            |
-| Section 4 — Geometry Family C (Variant Baseline) | figma-skill/SKILL.md:546        | `### Component Set Variant Baseline`                                   |
-| Section 5 — Mandatory Lookups by Phase           | figma-skill/SKILL.md:186        | `## Mandatory Lookups by Phase`                                        |
-| Section 5.2 — NNR rule for Lookups               | figma-skill/SKILL.md:24         | `## Non-Negotiable Rules` 10th bullet                                  |
-| Section 6.5 — Workflow 6 fields                  | figma-skill/SKILL.md:280        | `PlacementAudit` / `GeometryAudit` / `OverlapCheck` / `GeometryReaudit`|
-| Section 6.6 — Workflow 7 Geometry baseline        | figma-skill/SKILL.md:318        | `Geometry:` block                                                      |
-| Section 6.7 — Workflow 8 batch check             | figma-skill/SKILL.md:336        | `命名、NodeId、hierarchy、geometry` clause in check step                |
-| Section 6.8 — Workflow 9 Geometry layer           | figma-skill/SKILL.md:340        | `Naming → Structure → Geometry → Visual → DesignSystem → Flow`          |
-| Section 6.9 — Workflow 11 delivery report        | figma-skill/SKILL.md:359        | `Geometry:` / `OverlapMatrix:` / `VariantRowParity:`                   |
-| Section 7 — Component Geometry Mandates          | figma-skill/SKILL.md:534        | `## Component Geometry Mandates`                                       |
-| Section 8 — Six New Red Flags                    | figma-skill/SKILL.md:572-577    | last six bullets in `## Red Flags — Stop`                              |
-| Section 9.1 — execution.md Geometry-aware         | figma-skill/references/execution.md | `## Geometry-aware Commands`                                       |
-| Section 9.2 — validation.md Geometry Validation  | figma-skill/references/validation.md | `## Geometry Validation Checklist`                                  |
-| Section 10.1 — S11/S12/S13                       | figma-skill/tests/scenarios.md:67+ | three new pressure scenarios                                         |
-| Section 10.1 — Expected behaviors                 | figma-skill/tests/expected-behaviors.md | rows S11/S12/S13                                              |
-| Section 10.2 — validate-skill.mjs v1.2 asserts    | figma-skill/tests/validate-skill.mjs:165+ | `assertGeometryAndLookups`                                       |
-| Section 10.3 — naming-and-workflow.test.mjs v1.2  | figma-skill/tests/naming-and-workflow.test.mjs:108+ | three new tests                                            |
+## 4. Pressure Scenarios
 
-## Deterministic Tests
+| Section | Spec scenarios | Status |
+| --- | --- | --- |
+| §10 Pressure scenarios | S1–S13 | deterministic marker coverage only (test names cited above). Behavioural repetition deferred; recorded in `tests/v2-green-results.md`. |
+| §10 Multi-step Geometry | S15.1 / S15.2 / S15.3 | scenario rows + oracle coverage in `tests/scenarios.md` and `tests/expected-behaviors.md` |
+| §10 v2 persistence scenarios | S16–S25 | `tests/scenarios.md` adds S16–S25 (true v2 focus), `tests/expected-behaviors.md` adds matching rows, `tests/v2-baseline-results.md` documents the no-skill baseline outcome (10 PASS / 0 FAIL) |
+| §11 v2 behavioral coverage | fresh-context pressure for S1–S13, S15.1–S15.3, S16–S25 + 6×5 micro-tests | recorded in `tests/v2-green-results.md` (scaffold-only pending subagent re-enable) |
+| §11 cross-session E2E | disposable Figma `Nono` rehearsal | `tests/v2-e2e-results.md` (acceptance criteria scaffolded, pending subagent re-enable) |
 
-| Test                                                                                  | Purpose                                       | Status |
-|---------------------------------------------------------------------------------------|-----------------------------------------------|--------|
-| `node figma-skill/tests/validate-skill.mjs`                                           | Structure, wording, S1-S8, naming + workflow | PASS   |
-| `node --test figma-skill/tests/naming-and-workflow.test.mjs`                           | Dedicated naming/workflow coverage            | PASS   |
-| `node --test figma-skill/tests/figma-validate-bounds.test.mjs`                        | Bounds auditor regression                     | PASS   |
-| `powershell figma-skill/tests/install-figma-cli.Tests.ps1`                            | Installer fixtures                             | PASS   |
-| `powershell figma-skill/scripts/install-figma-cli.ps1 -PlanOnly`                     | Live stable Release plan                      | PASS   |
+## 5. Spec Resolution Notes
 
-## SKILL.md Coverage
-
-### Naming Grammar (Spec Sections 1–5)
-
-| Spec section                                | Implemented at                  | Marker                                                                 |
-|--------------------------------------------|---------------------------------|------------------------------------------------------------------------|
-| Section 1 — Language and Path Grammar      | figma-skill/SKILL.md:28         | `### Component Path`                                                   |
-| Section 1 — language anchor                 | figma-skill/SKILL.md:26         | `## Naming Grammar` heading                                            |
-| Section 2 — Fixed Base Categories          | figma-skill/SKILL.md:43-54      | Foundation / Primitive / Action / Input / Navigation / DataDisplay / Feedback / Overlay / Layout / Content / Internal / Deprecated |
-| Section 3 — Collision Resolution            | figma-skill/SKILL.md:89         | `### Collision Resolution`                                            |
-| Section 4 — Variants, Properties, Instances| figma-skill/SKILL.md:97         | `### Variant Axes`                                                     |
-| Section 4 — Instance naming                | figma-skill/SKILL.md:132        | `### Instance Naming`                                                  |
-| Section 5 — Screen path                    | figma-skill/SKILL.md:55         | `### Screen Path`                                                      |
-| Section 5 — Three-page architecture        | figma-skill/SKILL.md:136        | `## Three-Page Architecture (Free Figma Plan)`                         |
-| Section 5 — Specimen path                  | figma-skill/SKILL.md:74         | `### Specimen Path`                                                    |
-| Section 5 — Flow path                      | figma-skill/SKILL.md:83         | `### Flow Path`                                                        |
-
-### Workflows 0–11 (Spec Section 6)
-
-| Workflow  | Implemented at                  |
-|-----------|---------------------------------|
-| Workflow 0  | figma-skill/SKILL.md:187        |
-| Workflow 1  | figma-skill/SKILL.md:191        |
-| Workflow 2  | figma-skill/SKILL.md:195        |
-| Workflow 3  | figma-skill/SKILL.md:199        |
-| Workflow 4  | figma-skill/SKILL.md:203        |
-| Workflow 4A | figma-skill/SKILL.md:207        |
-| Workflow 4B | figma-skill/SKILL.md:211        |
-| Workflow 4C | figma-skill/SKILL.md:215        |
-| Workflow 4D | figma-skill/SKILL.md:219        |
-| Workflow 4E | figma-skill/SKILL.md:223        |
-| Workflow 4F | figma-skill/SKILL.md:227        |
-| Workflow 4G | figma-skill/SKILL.md:231        |
-| Workflow 4H | figma-skill/SKILL.md:235        |
-| Workflow 5  | figma-skill/SKILL.md:239        |
-| Workflow 6  | figma-skill/SKILL.md:243        |
-| Workflow 7  | figma-skill/SKILL.md:274        |
-| Workflow 8  | figma-skill/SKILL.md:278        |
-| Workflow 9  | figma-skill/SKILL.md:282        |
-| Workflow 10 | figma-skill/SKILL.md:286        |
-| Workflow 11 | figma-skill/SKILL.md:290        |
-
-### Diagrams (Spec Section 7)
-
-| Diagram                            | Implemented at                  |
-|------------------------------------|---------------------------------|
-| Total Workflow Graph               | figma-skill/SKILL.md:320        |
-| Task Entry and Reuse Graph         | figma-skill/SKILL.md:362        |
-| Single-Direction Dependency Graph | figma-skill/SKILL.md:408        |
-| Validation Order Graph             | figma-skill/SKILL.md:419        |
-| Page Architecture Graph            | figma-skill/SKILL.md:433        |
-
-## Behavior Scenarios
-
-| Scenario                                            | Choice | Coverage by deterministic test                                                  |
-|-----------------------------------------------------|--------|---------------------------------------------------------------------------------|
-| S1–S8                                               | B      | `validate-skill.mjs` S1–S8 markers                                              |
-| S9 — Component naming collision                     | B      | `naming-and-workflow.test.mjs` Variant axes + `### Collision Resolution`      |
-| S10 — Screen identity with State/Viewport/Role      | C      | `naming-and-workflow.test.mjs` Screen path markers + `### Screen Path`        |
-| S11 — Visual overlap on create                      | B      | `naming-and-workflow.test.mjs` overlap keywords + `### Auto Layout Mode Selection` |
-| S12 — Auto Layout overflow                          | B      | `naming-and-workflow.test.mjs` geometry families test                          |
-| S13 — Component Set variant baseline divergence     | B      | `naming-and-workflow.test.mjs` variant parity test                            |
-
-## Spec Resolution Notes
-
-- No `references/naming.md` was created; the spec revision folded naming grammar into `SKILL.md`.
-- Existing reference files (`installation.md`, `design-system.md`, `discovery-and-planning.md`, `execution.md`, `validation.md`) are unchanged in this upgrade.
-- The five new Red Flags from spec Section 9 are listed in `SKILL.md` `## Red Flags — Stop` at line 462.
-- v1.2: SKILL.md grew from 494 to 598 lines (+104). Adding `## Mandatory Lookups by Phase`, expanding Workflows 4A/4D/4F/6/7/8/9/11, and inserting `## Component Geometry Mandates` produced the change. References remain minimal-only.
-- v1.2: Tests grew from 7 → 10 in `naming-and-workflow.test.mjs`; validator adds `assertGeometryAndLookups`.
-- v1.2.4: SKILL.md grew further with Workflows 6/7/8/9/10/11 inserts + NNR +1 rule; validator adds `assertGeometryVerifierStrict` (11 assertions). scripts/ gains 4 helper scripts (list-children / overlap-check / apply-layout / resize-section) + README. New reference file `references/geometry-verifier.md`.
+- v1.2 SKILL line numbers were replaced with stable heading anchors (`##`, `###`) and export / schema names; no line numbers appear above.
+- `references/discovery-and-planning.md` was removed; its content migrated into `references/planning.md`.
+- `references/naming.md` is new and is the single naming authority.
+- `tests/workflow-contract.test.mjs` enforces SKILL.md ≤ 450 lines / ≤ 1800 words; current SKILL.md is well within that budget.
+- Behavior scenarios are recorded as PASS only where deterministic coverage or behavioral evidence exists.

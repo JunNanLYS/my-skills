@@ -8,10 +8,11 @@ import { TASK_STATUSES, TERMINAL_STATUSES, TRANSITIONS, WRITE_REQUIRED_WORKFLOWS
 
 const here = dirname(fileURLToPath(import.meta.url));
 const skill = join(here, "..");
-const SKILL = readFileSync(join(skill, "SKILL.md"), "utf8");
+const SKILL_RAW = readFileSync(join(skill, "SKILL.md"), "utf8");
+const SKILL = SKILL_RAW.replace(/\r\n/g, "\n");
 
 function readRef(name) {
-  return readFileSync(join(skill, "references", name), "utf8");
+  return readFileSync(join(skill, "references", name), "utf8").replace(/\r\n/g, "\n");
 }
 
 const refs = {

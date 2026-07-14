@@ -5,16 +5,17 @@ import { dirname, join } from "node:path";
 import { test } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const skill = readFileSync(join(root, "SKILL.md"), "utf8");
+const skillRaw = readFileSync(join(root, "SKILL.md"), "utf8");
+const skill = skillRaw.replace(/\r\n/g, "\n");
 const refs = {
-  naming: readFileSync(join(root, "references", "naming.md"), "utf8"),
-  execution: readFileSync(join(root, "references", "execution.md"), "utf8"),
-  geometry: readFileSync(join(root, "references", "geometry-verifier.md"), "utf8"),
-  validation: readFileSync(join(root, "references", "validation.md"), "utf8"),
-  state: readFileSync(join(root, "references", "state-and-recovery.md"), "utf8"),
-  planning: readFileSync(join(root, "references", "planning.md"), "utf8"),
-  designSystem: readFileSync(join(root, "references", "design-system.md"), "utf8"),
-  installation: readFileSync(join(root, "references", "installation.md"), "utf8"),
+  naming: readFileSync(join(root, "references", "naming.md"), "utf8").replace(/\r\n/g, "\n"),
+  execution: readFileSync(join(root, "references", "execution.md"), "utf8").replace(/\r\n/g, "\n"),
+  geometry: readFileSync(join(root, "references", "geometry-verifier.md"), "utf8").replace(/\r\n/g, "\n"),
+  validation: readFileSync(join(root, "references", "validation.md"), "utf8").replace(/\r\n/g, "\n"),
+  state: readFileSync(join(root, "references", "state-and-recovery.md"), "utf8").replace(/\r\n/g, "\n"),
+  planning: readFileSync(join(root, "references", "planning.md"), "utf8").replace(/\r\n/g, "\n"),
+  designSystem: readFileSync(join(root, "references", "design-system.md"), "utf8").replace(/\r\n/g, "\n"),
+  installation: readFileSync(join(root, "references", "installation.md"), "utf8").replace(/\r\n/g, "\n"),
 };
 
 function includesAny(haystack, needles) {

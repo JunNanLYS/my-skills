@@ -1,46 +1,48 @@
 # GREEN and REFACTOR Results
 
-## RED baseline
+This file records deterministic and behavioral coverage for every figma-skill release. Behavioural evidence is captured in dedicated evidence files (linked below). Marker presence is never counted as behavioral coverage.
 
-- Scenarios: 8
-- PASS: 6
-- FAIL: 2
-- Observed failures: S2 replaced the required CLI with an available MCP; S3 bypassed the authoritative design-system approval by using undocumented defaults.
+## Run Index
 
-## GREEN — version 1.0
+| Release | Deterministic | Behavioral — fresh-context pressure | Behavioral — micro-tests | Behavioral — cross-session E2E |
+| --- | --- | --- | --- | --- |
+| v1.2  | `validate-skill.mjs`, `naming-and-workflow.test.mjs`, `figma-validate-bounds.test.mjs`, `install-figma-cli.Tests.ps1` | deferred in v1.2 era | n/a | n/a |
+| v1.2.1 / v1.2.3 / v1.2.4 | same suite, plus helper scripts and `assertGeometryVerifierStrict` | deferred | n/a | n/a |
+| v2.0  | same suite, plus `workflow-contract.test.mjs`, fresh `task-state-*` coverage (208 / 208 PASS) | pending — see `v2-green-results.md` | pending — see `v2-green-results.md` | pending — see `v2-e2e-results.md` |
 
-The user explicitly stopped subagent execution after repeated subagent file-read failures. No agent behavior result is fabricated here.
-
-Deterministic validation maps every pressure scenario to mandatory runtime wording:
-
-| Scenario | Required behavior encoded | Result |
-|---|---|---|
-| S1 | separate design-system and Figma write approvals | PASS |
-| S2 | official stable GitHub Release, CLI verification, Yolo connect/status, no MCP substitute | PASS |
-| S3 | minimum missing rules and approval before Figma planning | PASS |
-| S4 | top-level and nearest help plus exact fallback approval | PASS |
-| S5 | design-system document wins; current scope and direct dependencies only | PASS |
-| S6 | re-read NodeId and geometry after structural changes | PASS |
-| S7 | open screenshots, correct visible failures, and revalidate | PASS |
-| S8 | hard stop and complete report after three correction rounds | PASS |
-
-Command:
+## v2.0 Deterministic Run
 
 ```bash
 node figma-skill/tests/validate-skill.mjs
+node --test figma-skill/tests/*.test.mjs
+powershell -NoProfile -ExecutionPolicy Bypass -File figma-skill/tests/install-figma-cli.Tests.ps1
+for f in figma-skill/scripts/*.mjs figma-skill/scripts/lib/task-state/*.mjs; do node --check "$f"; done
+git diff --check
 ```
 
-Observed result:
+Observed at HEAD `40db918 feat(figma-skill): activate v2 persistent workflows`:
 
-```text
-PASS: figma-skill structure, wording, and S1-S8 rule coverage
-```
+- `validate-skill.mjs` → PASS
+- `node --test` → tests 208 pass, 0 fail, 0 cancelled
+- PowerShell installer → PASS (Stage 1 baseline)
+- `node --check` for every modified/created `.mjs` → silent success
+- `git diff --check` → silent success
 
-## REFACTOR review
+## v2.0 Evidence Files
 
-The deterministic suite initially assumed phrases appeared in a fixed cross-file order. Runtime documentation contained every required fact, but the S2 regular expression required `GitHub Releases` to precede `禁止使用 Figma MCP`. The validator was refactored to assert an unordered set of required facts per scenario.
+- Baseline (no-skill fresh contexts): `figma-skill/tests/v2-baseline-results.md`
+- Pressure run plan + results:        `figma-skill/tests/v2-green-results.md`
+- Cross-session E2E plan + results:   `figma-skill/tests/v2-e2e-results.md`
 
-- Runtime skill change required: no
-- Skill version increment required: no
-- Surviving known baseline loopholes: none in deterministic rule coverage
-- Fresh-agent behavioral repetition: not run, per the user's instruction to stop using subagents
+## REFACTOR Notes
+
+- The legacy `assertGeometryAndLookups` / `assertConnectStatusGate` / `assertHelpDiscoveryGate` helpers were retired from `tests/validate-skill.mjs`; `assertRuntimeContract` / `assertConnectOrder` / `assertHelpDiscovery` replace them with v2 wording.
+- The legacy `tests/naming-and-workflow.test.mjs` SKILL-grammar assertions moved to `references/naming.md` plus a small SKILL.md routing check.
+- `assertNamingAndWorkflow` now accepts three arguments (skill, runtime, refs) and resolves every marker from the live authority file (naming.md or state-and-recovery.md).
+- Task 10 activated v2 by rewriting SKILL.md to 2.0 (164 lines / 850 words) with Mandatory Lookups, the Mermaid state machine, and the terminal reclamation gate.
+- Future validator drift (e.g., ordering, regex tightening) must be fixed in `validate-skill.mjs` before commit; this file is not a checklist.
+
+## Outcome
+
+- v2.0 is **structurally activated** (commit `40db918`); deterministic suite plus references routing + state machine + Geometry gate ordering are all wired and locked.
+- v2.0 **behavioral coverage is pending** and documented in `tests/v2-green-results.md` and `tests/v2-e2e-results.md` until a SubAgent with sufficient quota resumes the fresh-context probes.

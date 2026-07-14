@@ -22,8 +22,11 @@
 | `overlap-check.mjs`     | `PARENT_ID`, `OUTPUT_MODE` | AABB 相交矩阵，验证"0 overlap" | Workflow 9 / Workflow 10 |
 | `apply-layout.mjs`      | `PLANS`, `TASK_ID`, `BASELINE_REVISION` | 两阶段（preflight + apply with rollback）`{id, x, y}[]` 移动计划执行器。常量由 Workflow 6 CommandPlan 注入。返回 `{ok, code, summary, issues, observedAt, planned, applied, errors}` | Workflow 8 (Fixed-Order Execution) |
 | `resize-section.mjs`    | `PARENT_ID`, `EXPECTED_PARENT_TYPE`, `PAD_X`, `PAD_Y`, `TASK_ID`, `BASELINE_REVISION` | 容错收敛 Section / Frame 至 children bbox + padding。校验容器类型、拒绝负坐标。返回 `{ok, code, summary, issues, observedAt, parent, previous, resized, padding}` | Workflow 8 末尾 / Workflow 9 |
+| `inspect-geometry.mjs` | `NODE_ID` | 单节点 layout / sizing / constraints / absoluteBoundingBox | Workflow 7 |
+| `page-overlap-check.mjs` | `PAGE_ID` | 当前 Page 直系子节点 AABB 相交矩阵 | Workflow 9 |
 | `figma-validate-bounds.mjs` | 命令行参数 | 离线 JSON 分析（无需 daemon），验证 bounds 合规 | Workflow 9 辅助 |
-| `install-figma-cli.ps1` | — | Windows 安装 figma-cli | Workflow 1 |
+| `install-figma-cli.ps1` | — | Windows 安装 figma-cli（含 InstallRoot 与 SHA-256 校验） | Workflow 1 |
+| `figma-task-state.mjs` | `--project`, `--task`, `--session` 等 | v2 离线任务账本 CLI | Workflow 0B / 2 / 7 / 11 |
 
 ## Workflow 6 CommandPlan 注入 (apply-layout / resize-section)
 
@@ -207,7 +210,9 @@ node figma-skill/scripts/figma-task-state.mjs \
 
 `close` 必须在任务已归档（`archiveStatus=ARCHIVED`）时才能成功。成功时移除 lease 文件。对 `ARCHIVE_FAILED` 或 `ARCHIVING` 状态返回 `ILLEGAL_TRANSITION`。
 
-### 注意
+## 注意
 
-- 这是 v2 **支持工具**，不是 SKILL.md 描述的运行路径的一部分，因此**不**激活任何 v2 运行时行为；v1.2.4 SKILL.md 的 Workflow 0–11 仍然只通过 `figma-cli` 完成 Figma 写入。
+- 这是 v2 **支持工具**，不是 SKILL.md 描述的运行路径的一部分，因此**不**激活任何 v2 运行时行为；v2 SKILL.md 的 Workflow 0–11 仍然只通过 `figma-cli` 完成 Figma 写入。
 - 数据结构、错误码、命名格式受 `figma-skill/schemas/*.schema.json` 与 `scripts/lib/task-state/{errors,model,validate}.mjs` 约束。
+- 完整命令列表、acquire / takeover / release / checkpoint / todo-add / todo-update / evidence-add / screenshot-add / validate 等子命令行为在 `references/state-and-recovery.md` 与各自 fallback 文档中；本 README 不再展开逐子命令说明。
+- 详见 `references/execution.md` 的 offline state helper 段。

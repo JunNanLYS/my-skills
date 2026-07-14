@@ -91,7 +91,7 @@ function Assert-ValidInstallRoot {
     param([string]$Path)
     $leaf = Split-Path $Path -Leaf
     if ($leaf -ne "figma-cli") {
-        throw "InstallRoot must end with a leaf named 'figma-cli'; got '$leaf'. Full path: $Path"
+        throw "REJECTED-INSTALLROOT: '$leaf' is not 'figma-cli'"
     }
     $parent = Split-Path $Path -Parent
     if (-not $parent) {

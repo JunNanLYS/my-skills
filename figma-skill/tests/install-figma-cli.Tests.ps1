@@ -71,7 +71,7 @@ function Test-InstallRootRejection($Root, $ExpectedPattern) {
     if ($code -eq 0) {
         throw "InstallRoot '$Root' should have been rejected but was accepted."
     }
-    $text = $output -join "`n"
+    $text = ($output -join " ").Replace("`n"," ").Replace("`r"," ")
     if ($text -notmatch $ExpectedPattern) {
         throw "InstallRoot '$Root' rejection message did not match '$ExpectedPattern'. Got: $text"
     }
@@ -79,10 +79,10 @@ function Test-InstallRootRejection($Root, $ExpectedPattern) {
 }
 
 Write-Host "InstallRoot validation..."
-Test-InstallRootRejection "C:\" "filesystem root|leaf"
-Test-InstallRootRejection "D:\" "filesystem root|leaf"
-Test-InstallRootRejection "C:\Users\someone\stuff" "leaf|figma-cli"
-Test-InstallRootRejection "C:\Users\someone\Programs" "leaf|figma-cli"
+Test-InstallRootRejection "C:\" "REJECTED-INSTALLROOT"
+Test-InstallRootRejection "D:\" "REJECTED-INSTALLROOT"
+Test-InstallRootRejection "C:\Users\someone\stuff" "REJECTED-INSTALLROOT"
+Test-InstallRootRejection "C:\Users\someone\Programs" "REJECTED-INSTALLROOT"
 
 Write-Host "PASS: InstallRoot validation tests"
 
