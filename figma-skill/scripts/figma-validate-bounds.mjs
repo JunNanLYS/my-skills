@@ -148,6 +148,16 @@ function finiteNumber(value, path) {
   return value;
 }
 
+function finiteNonNegative(value, path) {
+  if (!Number.isFinite(value)) {
+    fail(`${path} must be a finite number, got ${value}`);
+  }
+  if (value < 0) {
+    fail(`${path} must be non-negative, got ${value}`);
+  }
+  return value;
+}
+
 function normalizeNode(node, path) {
   if (!node || typeof node !== "object" || Array.isArray(node)) {
     fail(`${path} must be an object`);
@@ -164,14 +174,14 @@ function normalizeNode(node, path) {
     type: node.type ?? null,
     x: finiteNumber(node.x ?? 0, `${path}.x`),
     y: finiteNumber(node.y ?? 0, `${path}.y`),
-    w: finiteNumber(node.w ?? 0, `${path}.w`),
-    h: finiteNumber(node.h ?? 0, `${path}.h`),
+    w: finiteNonNegative(node.w ?? 0, `${path}.w`),
+    h: finiteNonNegative(node.h ?? 0, `${path}.h`),
     clipsContent: node.clipsContent === true,
     children: children.map((child, index) => normalizeNode(child, `${path}.children[${index}]`)),
   };
 }
 
-function loadFromConfig(opts, rootId, warnings) {
+function loadFromConfig(opts, rootId) {
   const parsed = parseJsonInput(opts.config, "config");
   if (!parsed.root) {
     fail("config.root required");
@@ -179,24 +189,23 @@ function loadFromConfig(opts, rootId, warnings) {
 
   const root = normalizeNode(parsed.root, "config.root");
   if (root.id && root.id !== rootId) {
-    warnings.push(`config.root.id (${root.id}) !== rootNodeId arg (${rootId})`);
+    fail(`config.root.id (${root.id}) !== rootNodeId arg (${rootId})`);
   }
   return root;
 }
 
-function loadFromFigmaJson(opts, rootId, warnings) {
+function loadFromFigmaJson(opts, rootId) {
   const parsed = parseJsonInput(opts.figmaJson, "figma-json");
   if (!parsed.nodes || typeof parsed.nodes !== "object" || Array.isArray(parsed.nodes)) {
     fail("figma-json.nodes required");
   }
   if (parsed.rootId && parsed.rootId !== rootId) {
-    warnings.push(`figma-json.rootId (${parsed.rootId}) !== rootNodeId arg (${rootId})`);
+    fail(`figma-json.rootId (${parsed.rootId}) !== rootNodeId arg (${rootId})`);
   }
 
   const nodes = parsed.nodes;
   const built = new Map();
   const visiting = new Set();
-  const missing = [];
 
   function build(id) {
     if (built.has(id)) return built.get(id);
@@ -206,8 +215,7 @@ function loadFromFigmaJson(opts, rootId, warnings) {
 
     const rawNode = nodes[id];
     if (!rawNode) {
-      missing.push(id);
-      return null;
+      fail(`Node ${JSON.stringify(id)} referenced as child but missing from figma-json.nodes`);
     }
 
     visiting.add(id);
@@ -218,8 +226,7 @@ function loadFromFigmaJson(opts, rootId, warnings) {
 
     const children = [];
     for (const childId of childIds) {
-      const childNode = build(childId);
-      if (childNode) children.push(childNode);
+      children.push(build(childId));
     }
 
     visiting.delete(id);
@@ -230,8 +237,8 @@ function loadFromFigmaJson(opts, rootId, warnings) {
       type: rawNode.type ?? null,
       x: finiteNumber(rawNode.x ?? 0, `figma-json.nodes[${JSON.stringify(id)}].x`),
       y: finiteNumber(rawNode.y ?? 0, `figma-json.nodes[${JSON.stringify(id)}].y`),
-      w: finiteNumber(rawNode.w ?? 0, `figma-json.nodes[${JSON.stringify(id)}].w`),
-      h: finiteNumber(rawNode.h ?? 0, `figma-json.nodes[${JSON.stringify(id)}].h`),
+      w: finiteNonNegative(rawNode.w ?? 0, `figma-json.nodes[${JSON.stringify(id)}].w`),
+      h: finiteNonNegative(rawNode.h ?? 0, `figma-json.nodes[${JSON.stringify(id)}].h`),
       clipsContent: rawNode.clipsContent === true,
       children,
     };
@@ -243,9 +250,6 @@ function loadFromFigmaJson(opts, rootId, warnings) {
   const root = build(rootId);
   if (!root) {
     fail(`rootId ${rootId} not found in figma-json.nodes`);
-  }
-  if (missing.length > 0) {
-    warnings.push(`${missing.length} child id(s) referenced but missing from nodes: ${missing.slice(0, 5).join(", ")}${missing.length > 5 ? "..." : ""}`);
   }
 
   return root;
@@ -391,8 +395,8 @@ function main() {
   const { rootId, opts } = parseArgs();
   const warnings = [];
   const root = opts.figmaJson
-    ? loadFromFigmaJson(opts, rootId, warnings)
-    : loadFromConfig(opts, rootId, warnings);
+    ? loadFromFigmaJson(opts, rootId)
+    : loadFromConfig(opts, rootId);
 
   const tree = walk(root, opts.tolerance, opts.strict);
   const violations = flattenViolations(tree);

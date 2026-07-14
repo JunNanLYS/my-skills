@@ -4,7 +4,9 @@ param(
     [string]$ReleaseMetadataPath,
     [ValidateSet("AMD64", "ARM64")]
     [string]$Architecture = $env:PROCESSOR_ARCHITECTURE,
-    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\figma-cli")
+    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\figma-cli"),
+    [string]$TrustedChecksumPath,
+    [switch]$SkipExistingCheck
 )
 
 $ErrorActionPreference = "Stop"
@@ -85,8 +87,56 @@ function Refresh-ProcessPath {
     $env:Path = "$machine;$user"
 }
 
+function Assert-ValidInstallRoot {
+    param([string]$Path)
+    $leaf = Split-Path $Path -Leaf
+    if ($leaf -ne "figma-cli") {
+        throw "InstallRoot must end with a leaf named 'figma-cli'; got '$leaf'. Full path: $Path"
+    }
+    $parent = Split-Path $Path -Parent
+    if (-not $parent) {
+        throw "InstallRoot cannot be a filesystem root: $Path"
+    }
+    $broadParents = @(
+        [Environment]::GetFolderPath("ProgramFiles"),
+        [Environment]::GetFolderPath("ProgramFilesX86")
+    ) | Where-Object { $_ } | Select-Object -Unique
+    foreach ($bp in $broadParents) {
+        if ($Path -eq $bp) {
+            throw "InstallRoot cannot be a broad Programs directory: $Path"
+        }
+    }
+}
+
+function Get-FileSha256 {
+    param([string]$Path)
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Test-ChecksumMatch {
+    param([string]$ArchivePath, [string]$ChecksumPath, [string]$AssetName)
+    if (-not $ChecksumPath) {
+        Write-Host "[checksum] No TrustedChecksumPath provided; skipping SHA-256 verification."
+        return
+    }
+    if (-not (Test-Path -LiteralPath $ChecksumPath)) {
+        throw "TrustedChecksumPath not found: $ChecksumPath"
+    }
+    $checksums = Get-Content -Raw -LiteralPath $ChecksumPath | ConvertFrom-Json
+    if (-not $checksums.sha256) {
+        throw "TrustedChecksumPath JSON must contain a 'sha256' field."
+    }
+    $expected = $checksums.sha256
+    $actual = Get-FileSha256 -Path $ArchivePath
+    if ($actual -ne $expected) {
+        throw "SHA-256 mismatch for archive${AssetName}: expected $expected, got $actual"
+    }
+    Write-Host "[checksum] SHA-256 verified: $actual"
+}
+
 try {
-    if (-not $PlanOnly) {
+    Assert-ValidInstallRoot -Path $InstallRoot
+    if (-not $PlanOnly -and -not $SkipExistingCheck) {
         $existing = Get-Command figma-cli -ErrorAction SilentlyContinue
         if ($existing) {
             $existingVersion = Invoke-CheckedCommand -Command "figma-cli" -Arguments @("--version")
@@ -99,6 +149,14 @@ try {
     $release = Get-ReleaseMetadata -FixturePath $ReleaseMetadataPath
     $plan = Get-InstallPlan -Release $release -CpuArchitecture $Architecture
 
+    if ($plan.mode -eq "portable-zip" -and $TrustedChecksumPath) {
+        $plan["checksumSource"] = "trusted-checksum-path"
+    } elseif ($plan.mode -eq "portable-zip") {
+        $plan["checksumSource"] = "none"
+    } else {
+        $plan["checksumSource"] = "none-binary-unavailable"
+    }
+
     if ($PlanOnly) {
         $plan | ConvertTo-Json -Compress
         exit 0
@@ -108,7 +166,16 @@ try {
     $archive = Join-Path $TempRoot "release.zip"
     $expanded = Join-Path $TempRoot "expanded"
     New-Item -ItemType Directory -Path $expanded -Force | Out-Null
-    Invoke-WebRequest -UseBasicParsing -Headers @{ "User-Agent" = "figma-skill-installer" } -Uri $plan.downloadUrl -OutFile $archive
+    if ($plan.downloadUrl -match '^file://') {
+        $localPath = $plan.downloadUrl -replace '^file://', ''
+        if (-not (Test-Path -LiteralPath $localPath)) {
+            throw "Local archive not found: $localPath"
+        }
+        Copy-Item -LiteralPath $localPath -Destination $archive -Force
+    } else {
+        Invoke-WebRequest -UseBasicParsing -Headers @{ "User-Agent" = "figma-skill-installer" } -Uri $plan.downloadUrl -OutFile $archive
+    }
+    Test-ChecksumMatch -ArchivePath $archive -ChecksumPath $TrustedChecksumPath -AssetName $plan.assetName
     Expand-Archive -LiteralPath $archive -DestinationPath $expanded -Force
 
     if ($plan.mode -eq "portable-zip") {
@@ -123,6 +190,7 @@ try {
         Copy-Item -Path (Join-Path $executables[0].Directory.FullName "*") -Destination $InstallRoot -Recurse -Force
         Add-UserPathEntry -Entry $InstallRoot
     } else {
+        Write-Host "[checksum] Source archive mode — no binary to checksum; relying on package name/version validation."
         $nodeVersion = Invoke-CheckedCommand -Command "node" -Arguments @("--version")
         if ($nodeVersion -notmatch '^v(\d+)\.') {
             throw "Could not parse Node.js version '$nodeVersion'."
