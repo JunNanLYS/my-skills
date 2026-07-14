@@ -71,6 +71,57 @@ test("init-project is idempotent for an existing valid project", () => {
   }
 });
 
+test("init-project fails closed without repairing an incomplete existing project", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    const first = run(project, ["init-project", "--default-branch", "main", "--json"]);
+    assert.equal(first.status, 0, first.stderr);
+    const indexPath = join(project, ".figma", "index.json");
+    const schemaPath = join(project, ".figma", "schemas", "task-state.schema.json");
+    const screenshotPath = join(project, ".figma", "screenshot");
+    const before = readFileSync(indexPath, "utf8");
+    rmSync(schemaPath);
+    rmSync(screenshotPath, { recursive: true });
+
+    const result = run(project, ["init-project", "--default-branch", "main", "--json"]);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(parseEnvelope(result).error.code, "STATE_INVALID");
+    assert.equal(existsSync(schemaPath), false, "idempotent validation must not repair files");
+    assert.equal(existsSync(screenshotPath), false, "idempotent validation must not repair dirs");
+    assert.equal(readFileSync(indexPath, "utf8"), before, "validation must not mutate index");
+  } finally {
+    cleanup();
+  }
+});
+
+test("init-project rejects corrupt or mismatched persisted schemas without mutation", () => {
+  for (const [name, contents] of [
+    ["structurally invalid", "{}\n"],
+    ["mismatched", JSON.stringify({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      type: "object",
+      additionalProperties: false,
+      required: ["schemaVersion"],
+      properties: { schemaVersion: { const: 1 } },
+    }, null, 2) + "\n"],
+  ]) {
+    const { project, cleanup } = freshProject();
+    try {
+      const first = run(project, ["init-project", "--default-branch", "main", "--json"]);
+      assert.equal(first.status, 0, `${name}: ${first.stderr}`);
+      const schemaPath = join(project, ".figma", "schemas", "event.schema.json");
+      writeFileSync(schemaPath, contents, "utf8");
+
+      const result = run(project, ["init-project", "--default-branch", "main", "--json"]);
+      assert.equal(result.status, 2, `${name}: ${result.stderr}`);
+      assert.equal(parseEnvelope(result).error.code, "STATE_INVALID", name);
+      assert.equal(readFileSync(schemaPath, "utf8"), contents, name);
+    } finally {
+      cleanup();
+    }
+  }
+});
+
 test("init-project rejects an unknown schema argument with SCHEMA_UNSUPPORTED", () => {
   const { project, cleanup } = freshProject();
   try {
@@ -124,6 +175,16 @@ test("create writes the persistent ledger and returns revision 0", () => {
     assert.ok(existsSync(join(taskDir, "events.jsonl")));
     assert.ok(existsSync(join(taskDir, "evidence", "manifest.json")));
 
+    const plan = readFileSync(join(taskDir, "plan.md"), "utf8");
+    const todo = readFileSync(join(taskDir, "todo.md"), "utf8");
+    assert.match(plan, /Workflow 0B/);
+    assert.match(plan, /scope awaits discovery and classification/i);
+    assert.doesNotMatch(plan, /^\d+\.\s*$/m, "plan must not contain empty numbered steps");
+    assert.doesNotMatch(plan, /^-\s*$/m, "plan must not contain empty bullets");
+    assert.match(todo, /T-001/);
+    assert.match(todo, /Workflow 0B discovery and task classification/);
+    assert.doesNotMatch(todo, /^- \[[ x]\]\s*$/m, "todo must not contain empty checklist items");
+
     const events = readFileSync(join(taskDir, "events.jsonl"), "utf8").trim().split("\n");
     assert.equal(events.length, 1);
     const created = JSON.parse(events[0]);
@@ -167,46 +228,50 @@ test("create rejects duplicate task IDs and leaves the prior ledger intact", () 
     assert.equal(dup.status, 2, dup.stderr);
     const envelope = parseEnvelope(dup);
     assert.equal(envelope.ok, false);
-    assert.equal(envelope.error.code, "TASK_NOT_FOUND");
+    assert.equal(envelope.error.code, "STATE_INVALID");
+    assert.equal(envelope.error.details.taskId, "20260714-checkout-responsive");
   } finally {
     cleanup();
   }
 });
 
-test("create generates a deterministic -02 collision id when --task is omitted", () => {
+test("create derives title slugs and adds -02/-03 only for same-title collisions", () => {
   const { project, cleanup } = freshProject();
   try {
     run(project, ["init-project", "--default-branch", "main", "--json"]);
-    const first = run(project, [
+    const createAuto = (title) => run(project, [
       "create",
       "--title",
-      "First",
+      title,
       "--type",
       "Modify",
       "--write-required",
       "true",
       "--json",
     ]);
-    assert.equal(first.status, 0, first.stderr);
-    const firstEnv = parseEnvelope(first);
-    const firstId = firstEnv.data.state.taskId;
-    assert.match(firstId, /^[0-9]{8}-[a-z0-9]+(?:-[0-9]{2})?$/);
 
-    const second = run(project, [
-      "create",
-      "--title",
-      "Second",
-      "--type",
-      "Modify",
-      "--write-required",
-      "true",
-      "--json",
-    ]);
+    const first = createAuto("Checkout Responsive States");
+    assert.equal(first.status, 0, first.stderr);
+    const firstId = parseEnvelope(first).data.state.taskId;
+    assert.match(firstId, /^\d{8}-checkout-responsive-states$/);
+
+    const different = createAuto("Account Settings");
+    assert.equal(different.status, 0, different.stderr);
+    const differentId = parseEnvelope(different).data.state.taskId;
+    assert.match(differentId, /^\d{8}-account-settings$/);
+
+    const second = createAuto("Checkout   Responsive---States");
     assert.equal(second.status, 0, second.stderr);
-    const secondEnv = parseEnvelope(second);
-    const secondId = secondEnv.data.state.taskId;
-    assert.notEqual(firstId, secondId);
-    assert.ok(secondId.endsWith("-02"), `expected -02 collision suffix, got ${secondId}`);
+    const secondId = parseEnvelope(second).data.state.taskId;
+    assert.equal(secondId, `${firstId}-02`);
+
+    const third = createAuto("checkout responsive states");
+    assert.equal(third.status, 0, third.stderr);
+    assert.equal(parseEnvelope(third).data.state.taskId, `${firstId}-03`);
+
+    const fallback = createAuto("!!!");
+    assert.equal(fallback.status, 0, fallback.stderr);
+    assert.match(parseEnvelope(fallback).data.state.taskId, /^\d{8}-task$/);
   } finally {
     cleanup();
   }
@@ -232,6 +297,58 @@ test("create rejects a conceptual invalid type with STATE_INVALID", () => {
     const envelope = parseEnvelope(result);
     assert.equal(envelope.ok, false);
     assert.equal(envelope.error.code, "STATE_INVALID");
+  } finally {
+    cleanup();
+  }
+});
+
+test("list rejects malformed and schema-invalid persisted project files", () => {
+  const cases = [
+    ["malformed index", "index.json", "{not-json\n"],
+    ["schema-invalid index", "index.json", JSON.stringify({ schemaVersion: 1, updatedAt: "bad", tasks: [] }) + "\n"],
+    ["schema-invalid config", "config.json", JSON.stringify({ schemaVersion: 1 }) + "\n"],
+  ];
+
+  for (const [name, filename, contents] of cases) {
+    const { project, cleanup } = freshProject();
+    try {
+      const init = run(project, ["init-project", "--default-branch", "main", "--json"]);
+      assert.equal(init.status, 0, `${name}: ${init.stderr}`);
+      writeFileSync(join(project, ".figma", filename), contents, "utf8");
+
+      const result = run(project, ["list", "--json"]);
+      assert.equal(result.status, 2, `${name}: ${result.stderr}`);
+      assert.equal(parseEnvelope(result).error.code, "STATE_INVALID", name);
+    } finally {
+      cleanup();
+    }
+  }
+});
+
+test("create rejects an invalid persisted index before writing a task", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    run(project, ["init-project", "--default-branch", "main", "--json"]);
+    writeFileSync(join(project, ".figma", "index.json"), "{broken\n", "utf8");
+
+    const result = run(project, [
+      "create",
+      "--task",
+      "20260714-will-not-write",
+      "--title",
+      "Will not write",
+      "--type",
+      "Modify",
+      "--write-required",
+      "true",
+      "--json",
+    ]);
+    assert.equal(result.status, 2, result.stderr);
+    assert.equal(parseEnvelope(result).error.code, "STATE_INVALID");
+    assert.equal(
+      existsSync(join(project, ".figma", "tasks", "20260714-will-not-write")),
+      false,
+    );
   } finally {
     cleanup();
   }
@@ -312,6 +429,46 @@ test("show returns full task state and recovery text", () => {
     assert.equal(envelope.data.recovery.length > 0, true);
   } finally {
     cleanup();
+  }
+});
+
+test("show rejects malformed and schema-invalid task state", () => {
+  for (const [name, stateContents] of [
+    ["malformed", "{broken\n"],
+    ["schema-invalid", JSON.stringify({ schemaVersion: 1, status: "INVALID" }) + "\n"],
+  ]) {
+    const { project, cleanup } = freshProject();
+    try {
+      run(project, ["init-project", "--default-branch", "main", "--json"]);
+      run(project, [
+        "create",
+        "--task",
+        "20260714-invalid-state",
+        "--title",
+        "Invalid state",
+        "--type",
+        "Modify",
+        "--write-required",
+        "true",
+        "--json",
+      ]);
+      writeFileSync(
+        join(project, ".figma", "tasks", "20260714-invalid-state", "state.json"),
+        stateContents,
+        "utf8",
+      );
+
+      const result = run(project, [
+        "show",
+        "--task",
+        "20260714-invalid-state",
+        "--json",
+      ]);
+      assert.equal(result.status, 2, `${name}: ${result.stderr}`);
+      assert.equal(parseEnvelope(result).error.code, "STATE_INVALID", name);
+    } finally {
+      cleanup();
+    }
   }
 });
 

@@ -83,8 +83,8 @@ figma-cli run scripts/resize-section.mjs
 
 | 子命令 | 作用 |
 |---|---|
-| `init-project` | 在 `<project>` 下创建 `.figma/`、写入 `config.json`、`index.json`、README、复制四份 schema，并对已有项目幂等。 |
-| `create` | 新建任务账本：`.figma/tasks/<task-id>/{state.json, plan.md, todo.md, recovery.md, events.jsonl, evidence/manifest.json}`。省略 `--task` 时自动生成 `<YYYYMMDD>-NN`。 |
+| `init-project` | 在 `<project>` 下创建 `.figma/`、写入 `config.json`、`index.json`、README、复制四份 schema。对完整有效的已有项目幂等；缺失或损坏文件时失败关闭且不自动修复。 |
+| `create` | 新建任务账本：`.figma/tasks/<task-id>/{state.json, plan.md, todo.md, recovery.md, events.jsonl, evidence/manifest.json}`。省略 `--task` 时从标题生成 `YYYYMMDD-<title-slug>`；同标题冲突依次追加 `-02`、`-03`。 |
 | `list`   | 从 `index.json` 读取任务摘要，按 `updatedAt` 升序排序（同时间则按 `taskId`）。 |
 | `show`   | 返回指定 `taskId` 的 `state.json` 与 `recovery.md` 内容。 |
 
@@ -92,6 +92,8 @@ figma-cli run scripts/resize-section.mjs
 
 - 每个子命令都支持 `--project <root>`（必填）和 `--json`（可选）。
 - 成功时 JSON 走 stdout，错误时 JSON 走 stderr。
+- `config.json`、`index.json` 和任务 `state.json` 在每次读取时均重新校验；JSON 损坏或 schema 不合法统一以 `STATE_INVALID` 失败关闭。
+- 显式 `taskId` 重复属于 `STATE_INVALID`；`TASK_NOT_FOUND` 只用于 `show` 等读取不存在任务的情况。
 - 退出码：`0` 成功；`2` 输入或状态非法（`STATE_INVALID` / `TASK_NOT_FOUND` / `PROJECT_NOT_INITIALIZED` / `PATH_OUTSIDE_PROJECT` / `SCHEMA_UNSUPPORTED` / `SENSITIVE_DATA_REJECTED` 等）；`1` 有效命令在执行过程中失败（`internal error`）。
 - 默认输出是紧凑的纯文本（人读）；`--json` 输出 `{ ok, command, data? , error? }` 信封。
 - 不打印 token、cookie、用户环境变量，只暴露任务账本内容。

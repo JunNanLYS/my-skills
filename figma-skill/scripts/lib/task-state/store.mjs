@@ -7,12 +7,16 @@ import {
   readFileSync,
   renameSync,
   unlinkSync,
-  writeFileSync,
   writeSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { TaskStateError } from "./errors.mjs";
+import {
+  assertValidConfig,
+  assertValidIndex,
+  assertValidTaskState,
+} from "./validate.mjs";
 
 const SCHEMA_VERSION = 1;
 const PROJECT_DIRNAME = ".figma";
@@ -123,8 +127,34 @@ export function atomicWriteJson(filePath, value) {
   atomicWriteText(filePath, text);
 }
 
-function readJson(filePath) {
-  return JSON.parse(readFileSync(filePath, "utf8"));
+function readJson(filePath, label) {
+  try {
+    return JSON.parse(readFileSync(filePath, "utf8"));
+  } catch (error) {
+    if (error instanceof TaskStateError) {
+      throw error;
+    }
+    throw new TaskStateError(
+      "STATE_INVALID",
+      `${label} contains invalid JSON`,
+      { path: filePath, cause: error.message },
+    );
+  }
+}
+
+function validateRead(validator, value, label, filePath) {
+  try {
+    return validator(value);
+  } catch (error) {
+    if (error instanceof TaskStateError) {
+      throw error;
+    }
+    throw new TaskStateError(
+      "STATE_INVALID",
+      `${label} is invalid`,
+      { path: filePath, cause: error.message },
+    );
+  }
 }
 
 function ensureInitialized(root) {
@@ -141,17 +171,35 @@ function ensureInitialized(root) {
 function readProject(root) {
   ensureInitialized(root);
   const projectDir = join(root, PROJECT_DIRNAME);
-  const config = readJson(join(projectDir, CONFIG_FILENAME));
-  const index = readJson(join(projectDir, INDEX_FILENAME));
+  const configPath = join(projectDir, CONFIG_FILENAME);
+  const indexPath = join(projectDir, INDEX_FILENAME);
+  const config = validateRead(
+    assertValidConfig,
+    readJson(configPath, "project config"),
+    "project config",
+    configPath,
+  );
+  const index = validateRead(
+    assertValidIndex,
+    readJson(indexPath, "task index"),
+    "task index",
+    indexPath,
+  );
   return { projectRoot: root, projectDir, config, index };
 }
 
 function readTask(root, taskId) {
   const taskDir = resolveInsideProject(root, join(PROJECT_DIRNAME, TASKS_DIRNAME, taskId));
-  if (!existsSync(join(taskDir, STATE_FILENAME))) {
+  const statePath = join(taskDir, STATE_FILENAME);
+  if (!existsSync(statePath)) {
     throw new TaskStateError("TASK_NOT_FOUND", `task ${taskId} does not exist`, { taskId });
   }
-  const state = readJson(join(taskDir, STATE_FILENAME));
+  const state = validateRead(
+    assertValidTaskState,
+    readJson(statePath, `task ${taskId} state`),
+    `task ${taskId} state`,
+    statePath,
+  );
   return { taskDir, state };
 }
 

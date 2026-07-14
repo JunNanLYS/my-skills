@@ -19,7 +19,7 @@
  *   2  invalid input or state
  */
 
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -128,22 +128,35 @@ function todayStamp() {
   return `${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}`;
 }
 
-// Highest -NN counter that any ID under today's date prefix currently uses
-// in the index. The "omitted --task" generator uses this to assign globally
-// unique -NN suffixes across all auto-generated task ids for the same date.
-function highestAutoCounter(index, datePrefix) {
-  let max = 0;
-  for (const t of index.tasks) {
-    const id = t.taskId;
-    // Only consider ids that exactly equal the date prefix + -NN.
-    if (!id.startsWith(`${datePrefix}-`)) continue;
-    const tail = id.slice(datePrefix.length + 1);
-    const m = tail.match(/^(\d{2})$/);
-    if (m) {
-      max = Math.max(max, Number(m[1]));
+function slugifyTitle(title) {
+  const normalized = title
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase();
+  const slug = normalized
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return slug || "task";
+}
+
+function nextTaskId(index, title) {
+  const base = `${todayStamp()}-${slugifyTitle(title)}`;
+  const existing = new Set(index.tasks.map((task) => task.taskId));
+  if (!existing.has(base)) {
+    return base;
+  }
+  for (let collision = 2; collision <= 99; collision += 1) {
+    const candidate = `${base}-${collision.toString().padStart(2, "0")}`;
+    if (!existing.has(candidate)) {
+      return candidate;
     }
   }
-  return max;
+  throw new TaskStateError(
+    "STATE_INVALID",
+    `no collision suffix available for generated task id ${base}`,
+    { taskId: base },
+  );
 }
 
 function buildProjectConfig({ defaultBranch }) {
@@ -190,18 +203,16 @@ function planTemplate(taskState) {
     "",
     `Task id: \`${taskState.taskId}\``,
     `Type: ${taskState.taskType}`,
-    `Status: ${taskState.status} (workflow ${taskState.currentWorkflow})`,
+    `Status: ${taskState.status} (Workflow ${taskState.currentWorkflow})`,
     `Updated: ${taskState.updatedAt}`,
     "",
     "## Goal",
     "",
-    "Describe the goal of this task in 1-3 sentences. Update this section as the plan evolves.",
+    "The task scope awaits discovery and classification in Workflow 0B before a detailed execution plan is approved.",
     "",
     "## Steps",
     "",
-    "1. ",
-    "2. ",
-    "3. ",
+    "1. Complete Workflow 0B discovery and task classification, then record the confirmed scope and required approval gates.",
     "",
     "## Approval",
     "",
@@ -210,7 +221,7 @@ function planTemplate(taskState) {
     "",
     "## Notes",
     "",
-    "- ",
+    "No Figma write is permitted until discovery, classification, and applicable approvals are complete.",
     "",
   ].join("\n");
 }
@@ -224,15 +235,15 @@ function todoTemplate(taskState) {
     "",
     "## Open",
     "",
-    "- [ ] ",
+    "- [ ] T-001 — Complete Workflow 0B discovery and task classification; record the confirmed scope and approval gates in plan.md.",
     "",
     "## In progress",
     "",
-    "- [ ] ",
+    "No item is in progress; T-001 is the next canonical action.",
     "",
     "## Done",
     "",
-    "- [x] Task created",
+    "- [x] Task ledger created with revision 0 and a TASK_CREATED event.",
     "",
   ].join("\n");
 }
@@ -272,8 +283,6 @@ function buildTaskState({
   taskType,
   writeRequired,
   updatedAt,
-  eventId,
-  actor,
 }) {
   return {
     schemaVersion: SCHEMA_VERSION,
@@ -343,6 +352,88 @@ function loadSchemaFiles() {
   return out;
 }
 
+function schemaInvalid(message, details = {}) {
+  throw new TaskStateError("STATE_INVALID", message, details);
+}
+
+function parseSchema(filename, body) {
+  try {
+    return JSON.parse(body);
+  } catch (error) {
+    schemaInvalid(`persisted schema ${filename} contains invalid JSON`, {
+      schema: filename,
+      cause: error.message,
+    });
+  }
+}
+
+function assertPersistedSchema(filename, body, expectedBody = null) {
+  const schema = parseSchema(filename, body);
+  if (
+    schema.$schema !== "https://json-schema.org/draft/2020-12/schema" ||
+    schema.type !== "object" ||
+    schema.additionalProperties !== false ||
+    !Array.isArray(schema.required) ||
+    schema.properties?.schemaVersion?.const !== SCHEMA_VERSION
+  ) {
+    schemaInvalid(`persisted schema ${filename} is invalid`, { schema: filename });
+  }
+  if (expectedBody !== null) {
+    const expected = parseSchema(filename, expectedBody);
+    if (JSON.stringify(schema) !== JSON.stringify(expected)) {
+      schemaInvalid(`persisted schema ${filename} does not match the supported schema`, {
+        schema: filename,
+      });
+    }
+  }
+}
+
+function validateExistingInitialization({
+  projectRoot,
+  projectDir,
+  configPath,
+  indexPath,
+  schemasDest,
+  tasksDest,
+  screenshotDest,
+  readmePath,
+}) {
+  const requiredFiles = [configPath, indexPath, readmePath];
+  const requiredDirectories = [projectDir, schemasDest, tasksDest, screenshotDest];
+  for (const path of requiredFiles) {
+    if (!existsSync(path)) {
+      schemaInvalid("existing task-state project is incomplete", { path });
+    }
+  }
+  for (const path of requiredDirectories) {
+    try {
+      if (!statSync(path).isDirectory()) {
+        schemaInvalid("existing task-state project directory is missing", { path });
+      }
+    } catch (error) {
+      if (error instanceof TaskStateError) throw error;
+      schemaInvalid("existing task-state project directory is missing", { path });
+    }
+  }
+  const { config, index } = readProject(projectRoot);
+  const supportedSchemas = loadSchemaFiles();
+  for (const filename of SCHEMA_FILES) {
+    const schemaPath = join(schemasDest, filename);
+    if (!existsSync(schemaPath)) {
+      schemaInvalid("existing task-state project is missing a required schema", {
+        path: schemaPath,
+        schema: filename,
+      });
+    }
+    assertPersistedSchema(
+      filename,
+      readFileSync(schemaPath, "utf8"),
+      supportedSchemas[filename],
+    );
+  }
+  return { config, index };
+}
+
 function initProject({ projectRoot, defaultBranch, schemaVersionRequested, json }) {
   if (schemaVersionRequested !== undefined && Number(schemaVersionRequested) !== SCHEMA_VERSION) {
     throw new TaskStateError(
@@ -357,18 +448,22 @@ function initProject({ projectRoot, defaultBranch, schemaVersionRequested, json 
   const schemasDest = join(projectDir, SCHEMAS_DIRNAME);
   const tasksDest = join(projectDir, TASKS_DIRNAME);
   const screenshotDest = join(projectDir, SCREENSHOT_DIRNAME);
-  // Ensure directories exist so the first task creation does not need to
-  // create a parent that was never initialised.
-  mkdirSync(tasksDest, { recursive: true });
-  mkdirSync(screenshotDest, { recursive: true });
   const readmePath = join(projectDir, README_FILENAME);
 
-  const alreadyInitialized = existsSync(configPath) && existsSync(indexPath);
+  const alreadyInitialized = existsSync(configPath) || existsSync(indexPath);
   const updatedAt = nowIso();
 
   if (alreadyInitialized) {
-    const config = assertValidConfig(JSON.parse(readFileSync(configPath, "utf8")));
-    const index = assertValidIndex(JSON.parse(readFileSync(indexPath, "utf8")));
+    const { config, index } = validateExistingInitialization({
+      projectRoot,
+      projectDir,
+      configPath,
+      indexPath,
+      schemasDest,
+      tasksDest,
+      screenshotDest,
+      readmePath,
+    });
     return {
       envelope: {
         ok: true,
@@ -388,10 +483,15 @@ function initProject({ projectRoot, defaultBranch, schemaVersionRequested, json 
   const index = buildEmptyIndex(updatedAt);
   const schemas = loadSchemaFiles();
 
-  // Validate before writing to fail fast.
+  // Validate every value before the first write.
   assertValidConfig(config);
   assertValidIndex(index);
+  for (const [filename, body] of Object.entries(schemas)) {
+    assertPersistedSchema(filename, body);
+  }
 
+  mkdirSync(tasksDest, { recursive: true });
+  mkdirSync(screenshotDest, { recursive: true });
   atomicWriteText(readmePath, buildProjectReadme());
   atomicWriteJson(configPath, config);
   atomicWriteJson(indexPath, index);
@@ -442,18 +542,15 @@ function createTask({ projectRoot, flags, json, dryRun }) {
     );
   }
 
-  let taskId;
-  if (flags.task && flags.task !== true) {
-    taskId = flags.task;
-  } else {
-    // When --task is omitted, derive a globally unique -NN id for today's
-    // date so each created ledger is stable across runs and inspectable.
-    const datePrefix = todayStamp();
-    const counter = highestAutoCounter(index, datePrefix) + 1;
-    taskId = `${datePrefix}-${counter.toString().padStart(2, "0")}`;
-  }
-  if (index.tasks.some((t) => t.taskId === taskId)) {
-    throw new TaskStateError("TASK_NOT_FOUND", `task ${taskId} already exists`, { taskId });
+  const taskId = flags.task && flags.task !== true
+    ? flags.task
+    : nextTaskId(index, title);
+  if (index.tasks.some((task) => task.taskId === taskId)) {
+    throw new TaskStateError(
+      "STATE_INVALID",
+      `task ${taskId} already exists`,
+      { taskId },
+    );
   }
 
   const updatedAt = nowIso();
@@ -464,8 +561,6 @@ function createTask({ projectRoot, flags, json, dryRun }) {
     taskType: typeRaw,
     writeRequired,
     updatedAt,
-    eventId: makeEventId(taskId, updatedAt),
-    actor,
   });
   const event = buildCreatedEvent({
     taskId,
