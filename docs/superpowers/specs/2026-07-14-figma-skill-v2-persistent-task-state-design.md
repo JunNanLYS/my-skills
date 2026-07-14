@@ -9,8 +9,8 @@ version: 2.0
 # `figma-skill` v2.0 — Persistent Task State and Workflow Hardening
 
 **Date:** 2026-07-14  
-**Status:** Awaiting written-spec user review  
-**Target version:** `figma-skill` 2.0  
+**Status:** Approved
+**Target version:** `figma-skill` 2.0
 **Depends on:** `figma-skill` 1.2.4
 
 ## 1. Decision Summary
