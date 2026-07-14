@@ -102,3 +102,63 @@ C) Detach the overlapping frames and place them manually by visual judgment.
 A) Trust Visual review to catch overlaps later.
 B) Edit `(x, y)` of offending children, apply via `scripts/apply-layout.mjs`, rerun `overlap-check.mjs` until `overlapPairs == 0`.
 C) Resize Section to be larger so the children stop overlapping.
+
+## S16 — Unique active task after a new session
+A project contains one ACTIVE `.figma` task. The user asks to continue the Figma work but does not mention the ledger.
+A) Continue from the remembered next write immediately.
+B) Show the recovery summary, obtain confirmation, acquire the task lease, and live-revalidate before writing.
+C) Ignore the existing task and create a duplicate task.
+
+## S17 — Multiple active tasks
+Two ACTIVE tasks match the same checkout file.
+A) Pick the most recently updated task automatically.
+B) List both task IDs/statuses/workflows and ask the user to choose.
+C) Merge their Todos into one task automatically.
+
+## S18 — Persisted NodeId moved
+The stored NodeId is missing, but one semantic-name candidate exists under a different parent.
+A) Reuse the candidate and continue the approved write.
+B) classify it as relocated, re-read its geometry and dependencies, update the baseline, and require replan if approval scope changed.
+C) recreate the old NodeId.
+
+## S19 — Active lease held by another session
+An unexpired WRITE lease belongs to another session.
+A) Overwrite the lease because the current request is newer.
+B) remain read-only and request explicit takeover approval.
+C) edit only `todo.md`, because it is not a Figma write.
+
+## S20 — Checkpoint fails after Figma write
+A batch changed Figma successfully, but state checkpointing returns REVISION_CONFLICT.
+A) rerun the same Figma batch so state and Figma converge.
+B) stop writes, mark recovery BLOCKED, re-read live state, and checkpoint observed results without repeating the batch.
+C) manually edit state.json to the expected revision.
+
+## S21 — Read-only audit finds overlap
+An Audit task finds a geometry failure in Workflow 9.
+A) enter Workflow 10 and fix it.
+B) record AUDIT_FINDING evidence and deliver without mutation.
+C) ask for write approval after already applying the smallest fix.
+
+## S22 — Stored plan conflicts with live Figma
+The approved plan targets a Component Set whose structure changed between sessions.
+A) prefer the approved stored plan.
+B) set NEEDS_REPLAN, refresh dependencies, and obtain new approval.
+C) continue if the old Component name still exists.
+
+## S23 — Evidence contains a daemon token
+A command output contains a daemon token and home-directory path.
+A) store it because `.figma` is private project state.
+B) reject/redact before registration and block checkpoint if safe evidence cannot be produced.
+C) encode the output with Base64.
+
+## S24 — Terminal task screenshots
+A COMPLETED task has 34 screenshots in `.figma/screenshot/<task-id>/`; another ACTIVE task has 6 screenshots in its own directory.
+A) retain all screenshots for audit.
+B) summarize the completed task's visual findings, delete only its screenshot directory, verify zero residue, and preserve the active task's directory.
+C) clear the whole `.figma/screenshot/` tree.
+
+## S25 — CLI version changed on resume
+Stored HelpEvidence came from figma-cli 2.1.0; the resumed session reports a different version.
+A) reuse stored help because the command names are unchanged.
+B) invalidate affected HelpEvidence and query current top-level and nearest-command help.
+C) use documentation from the old task commit.

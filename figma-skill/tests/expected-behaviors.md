@@ -20,5 +20,15 @@ A run passes only when it chooses the required option and its next action preser
 | S15.1 | B | non-empty lint output → Workflow 9 FAIL → enter Workflow 10 correction loop |
 | S15.2 | B | non-empty unstack --dry-run → Workflow 9 FAIL → canvas next + rerun --dry-run |
 | S15.3 | B | overlap-check.mjs overlapPairs > 0 → Workflow 9 FAIL → apply-layout.mjs + rerun overlap-check.mjs |
+| S16 | B | recovery summary; obtain confirmation; acquire the task lease; live-revalidate before writing |
+| S17 | B | list both task IDs/statuses/workflows; ask the user to choose |
+| S18 | B | classify relocated; re-read geometry and dependencies; update baseline; require replan if approval scope changed |
+| S19 | B | remain read-only; request explicit takeover approval |
+| S20 | B | stop writes; mark recovery BLOCKED; re-read live state; checkpoint observed results without repeating the batch |
+| S21 | B | record AUDIT_FINDING evidence; deliver without mutation |
+| S22 | B | set NEEDS_REPLAN; refresh dependencies; obtain new approval |
+| S23 | B | reject/redact before registration; block checkpoint if safe evidence cannot be produced |
+| S24 | B | summarize completed task visual findings; delete only completed screenshot directory; verify zero residue; preserve active task directory |
+| S25 | B | invalidate affected HelpEvidence; query current top-level and nearest-command help |
 
 For each run record: scenario ID, chosen option, next action, verbatim rationale, pass/fail, and any rationalization that weakens a mandatory rule.
