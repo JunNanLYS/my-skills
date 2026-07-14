@@ -65,6 +65,7 @@ import {
   assertValidTaskState,
   assertValidEvent,
 } from "./lib/task-state/validate.mjs";
+import { archiveTask, closeTask } from "./lib/task-state/archive.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -820,6 +821,18 @@ function humanOutput(envelope) {
     process.stdout.write(`checkpoint ${s.taskId} status=${s.status} workflow=${s.currentWorkflow} revision=${s.revision}\n`);
     return;
   }
+  if (envelope.command === "archive") {
+    if (!envelope.ok) {
+      process.stderr.write(`archive failed: ${envelope.error.code} ${envelope.error.message}\n`);
+      return;
+    }
+    process.stdout.write(`archived ${data.taskId} status=${data.state.status} archiveStatus=${data.state.archiveStatus} deletions=${data.deletionCount}\n`);
+    return;
+  }
+  if (envelope.command === "close") {
+    process.stdout.write(`closed ${data.taskId} archiveStatus=${data.archiveStatus}\n`);
+    return;
+  }
   if (envelope.command === "evidence-add") {
     process.stdout.write(`evidence ${data.entry.id} kind=${data.entry.kind} sha256=${data.entry.sha256}\n`);
     return;
@@ -908,9 +921,55 @@ function dispatch(args) {
         validateLedger({ projectRoot, json }),
       );
       return;
+    case "archive":
+      runCommand("archive", ({ projectRoot, flags, json }) => {
+        const taskId = requireFlag(flags, "task");
+        const holder = requireFlag(flags, "holder");
+        const expectedRevision = flags["expected-revision"] && flags["expected-revision"] !== true
+          ? parseInt(flags["expected-revision"], 10) : undefined;
+        const terminalStatus = flags["terminal-status"] && flags["terminal-status"] !== true
+          ? flags["terminal-status"] : undefined;
+        const now = flags.now && flags.now !== true ? flags.now : undefined;
+        const result = archiveTask(projectRoot, {
+          taskId, holder, expectedRevision, terminalStatus, now,
+        });
+        if (result.ok) {
+          return {
+            envelope: {
+              ok: true,
+              command: "archive",
+              data: {
+                taskId: result.state.taskId,
+                state: result.state,
+                archiveStatus: result.state.archiveStatus,
+                deletionCount: result.deletionCount,
+                summaryPath: result.summaryPath,
+              },
+            },
+            json,
+          };
+        }
+        return {
+          envelope: { ok: false, command: "archive", error: result.error },
+          json,
+        };
+      });
+      return;
+    case "close":
+      runCommand("close", ({ projectRoot, flags, json }) => {
+        const taskId = requireFlag(flags, "task");
+        const holder = requireFlag(flags, "holder");
+        const now = flags.now && flags.now !== true ? flags.now : undefined;
+        const result = closeTask(projectRoot, { taskId, holder, now });
+        return {
+          envelope: { ok: true, command: "close", data: result },
+          json,
+        };
+      });
+      return;
     default:
       process.stderr.write(
-        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint|evidence-add|screenshot-add|validate> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\n`,
+        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint|evidence-add|screenshot-add|validate|archive|close> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\narchive requires --task <id> --holder <session> [--expected-revision <N>] [--terminal-status <STATUS>] [--now <ISO>]\nclose requires --task <id> --holder <session> [--now <ISO>]\n`,
       );
       process.exit(2);
   }

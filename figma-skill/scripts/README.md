@@ -87,6 +87,8 @@ figma-cli run scripts/resize-section.mjs
 | `create` | 新建任务账本：`.figma/tasks/<task-id>/{state.json, plan.md, todo.md, recovery.md, events.jsonl, evidence/manifest.json}`。省略 `--task` 时从标题生成 `YYYYMMDD-<title-slug>`；同标题冲突依次追加 `-02`、`-03`。 |
 | `list`   | 从 `index.json` 读取任务摘要，按 `updatedAt` 升序排序（同时间则按 `taskId`）。 |
 | `show`   | 返回指定 `taskId` 的 `state.json` 与 `recovery.md` 内容。 |
+| `archive` | 归档一个已到达终态的任务：写入 `final-summary.md`、删除 `.figma/screenshot/<task-id>/`、移除 lease。失败时设置 `ARCHIVE_FAILED` 并保留 lease 供诊断。 |
+| `close`   | 关闭一个已归档（`archiveStatus=ARCHIVED`）的任务：移除 lease 文件。对非 `ARCHIVED` 状态返回 `ILLEGAL_TRANSITION`。 |
 
 ### 公共约定
 
@@ -118,7 +120,52 @@ node figma-skill/scripts/figma-task-state.mjs --project "$PWD" list --json
 # 查看单个任务
 node figma-skill/scripts/figma-task-state.mjs \
   --project "$PWD" show --task 20260714-checkout-responsive --json
+
+# 归档一个已完成的任务（需要 lease、已审查截图、可用的 visual summary）
+node figma-skill/scripts/figma-task-state.mjs \
+  --project "$PWD" archive \
+  --task 20260714-checkout-responsive \
+  --holder session-a \
+  --expected-revision 2 \
+  --terminal-status COMPLETED --json
+
+# 关闭一个已归档的任务（移除 lease）
+node figma-skill/scripts/figma-task-state.mjs \
+  --project "$PWD" close \
+  --task 20260714-checkout-responsive \
+  --holder session-a --json
 ```
+
+### archive 命令详情
+
+`archive` 要求任务处于**终态**（`FAILED` / `CANCELLED` / `COMPLETED` / `SUPERSEDED`），且 `archiveStatus` 必须为 `NOT_ARCHIVED`。非终态（`BLOCKED` / `STALE` / `NEEDS_REPLAN` 等）返回 `ILLEGAL_TRANSITION`。
+
+**前置条件：**
+- 任务持有 lease（holder 参数匹配）
+- `expectedRevision` 与当前 state revision 一致（否则返回 `REVISION_CONFLICT`）
+- 所有截图已审查（`manifest.json` 中每个 entry 的 `reviewed` 必须为 `true`）
+- `state.validation.visual.summary` 非空
+
+**四阶段流程：**
+1. `NOT_ARCHIVED` → `ARCHIVING`：原子写入状态 + index + 事件（file transaction + rollback）
+2. 生成 `final-summary.md`（纯计算，不写盘）
+3. 写入 summary + 删除 `screenshot/<task-id>/` 目录
+4. `ARCHIVING` → `ARCHIVED`：原子写入终态 + index + 事件；移除 lease
+
+**截图隔离：**
+- 只删除 `.figma/screenshot/<task-id>/` 整个目录
+- 其他任务的截图目录不受影响
+- 删除后确认零残留
+
+**失败恢复：**
+- 阶段 2–4 的任意失败均设置 `archiveStatus=ARCHIVE_FAILED`，保留 lease 供诊断
+- 发出 `ARCHIVE_FAILED` 事件
+- 不会错误删除其他任务的数据
+- 不产生 `TASK_ARCHIVED` 事件
+
+### close 命令详情
+
+`close` 必须在任务已归档（`archiveStatus=ARCHIVED`）时才能成功。成功时移除 lease 文件。对 `ARCHIVE_FAILED` 或 `ARCHIVING` 状态返回 `ILLEGAL_TRANSITION`。
 
 ### 注意
 
