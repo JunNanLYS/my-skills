@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://claude.ai/skills/figma-skill/schemas/event.schema.json",
+  "title": "Figma task-state event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "eventId",
+    "taskId",
+    "revision",
+    "type",
+    "actor",
+    "at",
+    "evidence"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "eventId": { "type": "string", "minLength": 1 },
+    "taskId": {
+      "type": "string",
+      "pattern": "^[0-9]{8}-[a-z0-9]+(?:-[a-z0-9]+)*(?:-[0-9]{2})?$"
+    },
+    "revision": { "type": "integer", "minimum": 0 },
+    "type": {
+      "type": "string",
+      "enum": [
+        "TASK_CREATED",
+        "LEASE_ACQUIRED",
+        "LEASE_TAKEN_OVER",
+        "APPROVAL_RECORDED",
+        "WORKFLOW_ENTERED",
+        "TODO_UPDATED",
+        "BATCH_STARTED",
+        "BATCH_COMPLETED",
+        "VALIDATION_RECORDED",
+        "STALE_DETECTED",
+        "REPLAN_REQUIRED",
+        "TASK_BLOCKED",
+        "TASK_FAILED",
+        "TASK_CANCELLED",
+        "TASK_COMPLETED",
+        "SCREENSHOTS_CLEANED",
+        "TASK_ARCHIVED",
+        "ARCHIVE_FAILED",
+        "LEASE_RELEASED"
+      ]
+    },
+    "workflow": { "type": "string", "minLength": 1 },
+    "actor": { "type": "string", "minLength": 1 },
+    "at": { "type": "string", "format": "date-time" },
+    "evidence": { "type": "array", "items": { "type": "string" } },
+    "details": { "type": "object" }
+  }
+}
