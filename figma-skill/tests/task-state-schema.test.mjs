@@ -191,6 +191,128 @@ test("rejects unknown event types and malformed event fields", () => {
   assertStateInvalid(() => assertValidEvent({ ...validEvent, extra: true }));
 });
 
+test("accepts valid event.details with known typed keys", () => {
+  const leaseAcquired = {
+    ...validEvent,
+    type: "LEASE_ACQUIRED",
+    details: {
+      holder: "claude",
+      expiry: "2026-07-14T11:12:00+08:00",
+    },
+  };
+  const leaseTakenOver = {
+    ...validEvent,
+    type: "LEASE_TAKEN_OVER",
+    details: {
+      priorHolder: "other-agent",
+      newHolder: "claude",
+      reason: "lease-expired",
+    },
+  };
+  const approvalRecorded = {
+    ...validEvent,
+    type: "APPROVAL_RECORDED",
+    details: {
+      gate: "TaskClassificationGate",
+      gateStatus: "PASS",
+      priorStatus: "DRAFT",
+      nextStatus: "READY",
+    },
+  };
+  const workflowEntered = {
+    ...validEvent,
+    type: "WORKFLOW_ENTERED",
+    details: {
+      priorWorkflow: "0B",
+      nextWorkflow: "4A",
+    },
+  };
+  const todoUpdated = {
+    ...validEvent,
+    type: "TODO_UPDATED",
+    details: {
+      todo: ["node:123", "node:456"],
+    },
+  };
+  const batchStarted = {
+    ...validEvent,
+    type: "BATCH_STARTED",
+    details: {
+      batch: 2,
+    },
+  };
+  const batchCompleted = {
+    ...validEvent,
+    type: "BATCH_COMPLETED",
+    details: {
+      batch: 1,
+    },
+  };
+  const validationRecorded = {
+    ...validEvent,
+    type: "VALIDATION_RECORDED",
+    details: {
+      evidence: ["screenshot-001.png"],
+    },
+  };
+  const taskArchived = {
+    ...validEvent,
+    type: "TASK_ARCHIVED",
+    details: {
+      priorStatus: "COMPLETED",
+      deletion: { ids: ["task-state.json"] },
+    },
+  };
+
+  for (const [name, event] of [
+    ["lease-acquired", leaseAcquired],
+    ["lease-taken-over", leaseTakenOver],
+    ["approval-recorded", approvalRecorded],
+    ["workflow-entered", workflowEntered],
+    ["todo-updated", todoUpdated],
+    ["batch-started", batchStarted],
+    ["batch-completed", batchCompleted],
+    ["validation-recorded", validationRecorded],
+    ["task-archived", taskArchived],
+  ]) {
+    assert.doesNotThrow(() => assertValidEvent(event), name);
+  }
+});
+
+test("rejects event.details with unknown keys", () => {
+  assertStateInvalid(() =>
+    assertValidEvent({
+      ...validEvent,
+      type: "LEASE_ACQUIRED",
+      details: { holder: "claude", unknownField: "bad" },
+    }),
+  );
+  assertStateInvalid(() =>
+    assertValidEvent({
+      ...validEvent,
+      type: "TASK_CREATED",
+      details: { spurious: true },
+    }),
+  );
+});
+
+test("rejects event.details with wrong value types for known keys", () => {
+  assertStateInvalid(() =>
+    assertValidEvent({
+      ...validEvent,
+      type: "LEASE_ACQUIRED",
+      details: { holder: 123 },
+    }),
+  );
+  assertStateInvalid(() =>
+    assertValidEvent({
+      ...validEvent,
+      type: "LEASE_ACQUIRED",
+      details: { expiry: "not-a-datetime" },
+    }),
+  );
+});
+
 test("rejects sensitive values in config", () => {
   for (const secretish of [
     { apiKey: "figd_secret" },

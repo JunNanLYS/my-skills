@@ -50,6 +50,115 @@
     "actor": { "type": "string", "minLength": 1 },
     "at": { "type": "string", "format": "date-time" },
     "evidence": { "type": "array", "items": { "type": "string" } },
-    "details": { "type": "object" }
+    "details": { "$ref": "#/$defs/eventDetails" }
+  },
+  "$defs": {
+    "eventDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "holder": {
+          "type": "string",
+          "description": "Agent holding the lease (LEASE_ACQUIRED, LEASE_RELEASED)"
+        },
+        "expiry": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Lease expiry timestamp"
+        },
+        "priorHolder": {
+          "type": "string",
+          "description": "Previous lease holder (LEASE_TAKEN_OVER)"
+        },
+        "newHolder": {
+          "type": "string",
+          "description": "New lease holder (LEASE_TAKEN_OVER)"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for lease event (LEASE_TAKEN_OVER, LEASE_RELEASED)"
+        },
+        "gate": {
+          "type": "string",
+          "description": "Gate name (APPROVAL_RECORDED)"
+        },
+        "gateStatus": {
+          "type": "string",
+          "enum": ["PENDING", "PASS", "FAIL", "BLOCKED", "NOT_REQUIRED"],
+          "description": "Gate status after approval (APPROVAL_RECORDED)"
+        },
+        "priorStatus": {
+          "type": "string",
+          "description": "Prior task status (APPROVAL_RECORDED, WORKFLOW_ENTERED, TASK_ARCHIVED)"
+        },
+        "nextStatus": {
+          "type": "string",
+          "description": "Next task status (APPROVAL_RECORDED)"
+        },
+        "priorWorkflow": {
+          "type": "string",
+          "description": "Prior workflow name (WORKFLOW_ENTERED)"
+        },
+        "nextWorkflow": {
+          "type": "string",
+          "description": "Next workflow name (WORKFLOW_ENTERED)"
+        },
+        "todo": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Node IDs or task identifiers (TODO_UPDATED)"
+        },
+        "batch": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Batch number (BATCH_STARTED, BATCH_COMPLETED)"
+        },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Evidence file references (VALIDATION_RECORDED)"
+        },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["designSystem", "figmaWrite"],
+          "properties": {
+            "designSystem": {
+              "type": "string",
+              "enum": ["PENDING", "APPROVED", "REJECTED", "NOT_REQUIRED"]
+            },
+            "figmaWrite": {
+              "type": "string",
+              "enum": ["PENDING", "APPROVED", "REJECTED", "NOT_REQUIRED"]
+            }
+          },
+          "description": "Approval decisions (APPROVAL_RECORDED)"
+        },
+        "correction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "round": { "type": "integer", "minimum": 0 }
+          },
+          "description": "Correction round info (TASK_FAILED)"
+        },
+        "priorArchiveStatus": {
+          "type": "string",
+          "enum": ["NOT_ARCHIVED", "ARCHIVING", "ARCHIVED", "ARCHIVE_FAILED"],
+          "description": "Prior archive status (TASK_ARCHIVED)"
+        },
+        "deletion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ids": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "description": "Files deleted during archiving (TASK_ARCHIVED)"
+        }
+      }
+    }
   }
 }

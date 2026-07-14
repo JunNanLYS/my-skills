@@ -88,6 +88,26 @@ const REQUIRED_EVENT_KEYS = Object.freeze([
   "at",
   "evidence",
 ]);
+const EVENT_DETAIL_KEYS = Object.freeze([
+  "holder",
+  "expiry",
+  "priorHolder",
+  "newHolder",
+  "reason",
+  "gate",
+  "gateStatus",
+  "priorStatus",
+  "nextStatus",
+  "priorWorkflow",
+  "nextWorkflow",
+  "todo",
+  "batch",
+  "evidence",
+  "approval",
+  "correction",
+  "priorArchiveStatus",
+  "deletion",
+]);
 
 const SENSITIVE_KEY_PATTERN = /(?:secret|token|password|api[_-]?key|apikey|auth|authorization|credential|private[_-]?key|access[_-]?key)/i;
 const SENSITIVE_VALUE_PATTERN = /(?:secret|token|password|api[_-]?key|apikey|auth|authorization|credential|private[_-]?key|access[_-]?key)\s*[:=]/i;
@@ -333,7 +353,7 @@ export function assertValidEvent(value) {
   assertDateTime(value.at, "event.at");
   assertStringArray(value.evidence, "event.evidence");
   if (Object.hasOwn(value, "details")) {
-    assertPlainObject(value.details, "event.details");
+    assertEventDetails(value.details);
   }
   return value;
 }
@@ -383,4 +403,76 @@ function assertValidation(value) {
   assertBoolean(visual.required, "taskState.validation.visual.required");
   assertBoolean(visual.reviewed, "taskState.validation.visual.reviewed");
   assertNullableString(visual.summary, "taskState.validation.visual.summary");
+}
+
+function assertEventDetails(value) {
+  assertPlainObject(value, "event.details");
+  assertKnownKeys(value, EVENT_DETAIL_KEYS, "event.details");
+
+  if (Object.hasOwn(value, "holder")) {
+    assertString(value.holder, "event.details.holder");
+  }
+  if (Object.hasOwn(value, "expiry")) {
+    assertDateTime(value.expiry, "event.details.expiry");
+  }
+  if (Object.hasOwn(value, "priorHolder")) {
+    assertString(value.priorHolder, "event.details.priorHolder");
+  }
+  if (Object.hasOwn(value, "newHolder")) {
+    assertString(value.newHolder, "event.details.newHolder");
+  }
+  if (Object.hasOwn(value, "reason")) {
+    assertString(value.reason, "event.details.reason");
+  }
+  if (Object.hasOwn(value, "gate")) {
+    assertString(value.gate, "event.details.gate");
+  }
+  if (Object.hasOwn(value, "gateStatus")) {
+    assertEnum(value.gateStatus, GATE_STATUSES, "event.details.gateStatus");
+  }
+  if (Object.hasOwn(value, "priorStatus")) {
+    assertEnum(value.priorStatus, TASK_STATUSES, "event.details.priorStatus");
+  }
+  if (Object.hasOwn(value, "nextStatus")) {
+    assertEnum(value.nextStatus, TASK_STATUSES, "event.details.nextStatus");
+  }
+  if (Object.hasOwn(value, "priorWorkflow")) {
+    assertString(value.priorWorkflow, "event.details.priorWorkflow");
+  }
+  if (Object.hasOwn(value, "nextWorkflow")) {
+    assertString(value.nextWorkflow, "event.details.nextWorkflow");
+  }
+  if (Object.hasOwn(value, "todo")) {
+    assertStringArray(value.todo, "event.details.todo");
+  }
+  if (Object.hasOwn(value, "batch")) {
+    assertNonNegativeInteger(value.batch, "event.details.batch");
+  }
+  if (Object.hasOwn(value, "evidence")) {
+    assertStringArray(value.evidence, "event.details.evidence");
+  }
+  if (Object.hasOwn(value, "approval")) {
+    assertPlainObject(value.approval, "event.details.approval");
+    assertKnownKeys(value.approval, APPROVAL_KEYS, "event.details.approval");
+    assertRequiredKeys(value.approval, APPROVAL_KEYS, "event.details.approval");
+    assertEnum(value.approval.designSystem, APPROVAL_STATUSES, "event.details.approval.designSystem");
+    assertEnum(value.approval.figmaWrite, APPROVAL_STATUSES, "event.details.approval.figmaWrite");
+  }
+  if (Object.hasOwn(value, "correction")) {
+    assertPlainObject(value.correction, "event.details.correction");
+    assertKnownKeys(value.correction, ["round"], "event.details.correction");
+    if (Object.hasOwn(value.correction, "round")) {
+      assertNonNegativeInteger(value.correction.round, "event.details.correction.round");
+    }
+  }
+  if (Object.hasOwn(value, "priorArchiveStatus")) {
+    assertEnum(value.priorArchiveStatus, ARCHIVE_STATUSES, "event.details.priorArchiveStatus");
+  }
+  if (Object.hasOwn(value, "deletion")) {
+    assertPlainObject(value.deletion, "event.details.deletion");
+    assertKnownKeys(value.deletion, ["ids"], "event.details.deletion");
+    if (Object.hasOwn(value.deletion, "ids")) {
+      assertStringArray(value.deletion.ids, "event.details.deletion.ids");
+    }
+  }
 }
