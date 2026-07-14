@@ -512,9 +512,8 @@ function initProject({ projectRoot, defaultBranch, schemaVersionRequested, json 
   };
 }
 
-function makeEventId(taskId, updatedAt) {
-  const stamp = updatedAt.replace(/[^0-9]/g, "").slice(0, 14) || Date.now().toString();
-  return `evt-${taskId}-${stamp}-001`;
+function makeEventId() {
+  return "E-0001";
 }
 
 function createTask({ projectRoot, flags, json, dryRun }) {
@@ -569,7 +568,7 @@ function createTask({ projectRoot, flags, json, dryRun }) {
     taskId,
     revision: state.revision,
     updatedAt,
-    eventId: makeEventId(taskId, updatedAt),
+    eventId: makeEventId(),
     actor,
   });
 
@@ -817,7 +816,7 @@ function dispatch(args) {
       return;
     default:
       process.stderr.write(
-        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint> --project <root> [--json]\n`,
+        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\n`,
       );
       process.exit(2);
   }

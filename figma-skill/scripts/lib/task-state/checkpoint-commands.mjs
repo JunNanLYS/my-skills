@@ -1,25 +1,28 @@
 import { TaskStateError } from "./errors.mjs";
 import { checkpointTask } from "./checkpoint.mjs";
 
-const EVENT_DETAIL_WHITELIST = new Set([
+const STRING_EVENT_DETAIL_KEYS = new Set([
   "holder",
   "priorHolder",
   "newHolder",
   "reason",
+  "expiry",
   "gate",
   "gateStatus",
   "priorStatus",
   "nextStatus",
   "priorWorkflow",
   "nextWorkflow",
+  "priorArchiveStatus",
+]);
+
+const NON_STRING_EVENT_DETAIL_KEYS = new Set([
   "todo",
   "batch",
   "evidence",
   "approval",
   "correction",
-  "priorArchiveStatus",
   "deletion",
-  "nextAction",
 ]);
 
 function requireFlag(flags, name) {
@@ -49,11 +52,18 @@ function buildEventDetails(flags) {
   for (const key of Object.keys(flags)) {
     if (!key.startsWith("detail-")) continue;
     const detailName = key.slice("detail-".length);
-    if (!EVENT_DETAIL_WHITELIST.has(detailName)) {
+    if (NON_STRING_EVENT_DETAIL_KEYS.has(detailName)) {
+      throw new TaskStateError(
+        "STATE_INVALID",
+        `event detail --${key} cannot be represented safely by the string-only CLI`,
+        { key, expected: "typed library event.details value" },
+      );
+    }
+    if (!STRING_EVENT_DETAIL_KEYS.has(detailName)) {
       throw new TaskStateError(
         "STATE_INVALID",
         `unknown event detail key --${key}`,
-        { key, allowed: Array.from(EVENT_DETAIL_WHITELIST) },
+        { key, allowed: Array.from(STRING_EVENT_DETAIL_KEYS) },
       );
     }
     details[detailName] = flags[key];
@@ -68,7 +78,25 @@ export function runCheckpoint({ projectRoot, flags, json }) {
     requireFlag(flags, "expected-revision"),
     "expected-revision",
   );
-  const eventType = requireFlag(flags, "event-type");
+  const eventFlag = flags.event && flags.event !== true ? flags.event : null;
+  const eventTypeFlag = flags["event-type"] && flags["event-type"] !== true
+    ? flags["event-type"]
+    : null;
+  if (eventFlag !== null && eventTypeFlag !== null && eventFlag !== eventTypeFlag) {
+    throw new TaskStateError(
+      "STATE_INVALID",
+      "--event and --event-type must match when both are supplied",
+      { event: eventFlag, eventType: eventTypeFlag },
+    );
+  }
+  const eventType = eventFlag ?? eventTypeFlag;
+  if (eventType === null) {
+    throw new TaskStateError(
+      "STATE_INVALID",
+      "missing required flag --event",
+      { flag: "event" },
+    );
+  }
   const workflow = flags.workflow && flags.workflow !== true ? flags.workflow : null;
   const status = flags.status && flags.status !== true ? flags.status : null;
   const now = flags.now && flags.now !== true ? flags.now : null;

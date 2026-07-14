@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { test } from "node:test";
@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { acquireLease, assertLease, takeoverLease, renewLease, releaseLease } from "../scripts/lib/task-state/lease.mjs";
 import { assertTransition, checkpointTask } from "../scripts/lib/task-state/checkpoint.mjs";
 import { readTask } from "../scripts/lib/task-state/store.mjs";
+import { withTaskMutationLock } from "../scripts/lib/task-state/transaction.mjs";
 import { TaskStateError } from "../scripts/lib/task-state/errors.mjs";
 
 const require = createRequire(import.meta.url);
@@ -67,6 +68,41 @@ function readEvents(project, taskId) {
     .map((line) => JSON.parse(line));
 }
 
+function taskPath(project, taskId, filename) {
+  return join(project, ".figma", "tasks", taskId, filename);
+}
+
+function fileSnapshot(project, taskId) {
+  const taskDir = join(project, ".figma", "tasks", taskId);
+  return {
+    events: readFileSync(join(taskDir, "events.jsonl")),
+    recovery: readFileSync(join(taskDir, "recovery.md")),
+    state: readFileSync(join(taskDir, "state.json")),
+    index: readFileSync(join(project, ".figma", "index.json")),
+    lease: existsSync(join(taskDir, "lease.json"))
+      ? readFileSync(join(taskDir, "lease.json"))
+      : null,
+  };
+}
+
+function assertSnapshotEqual(actual, expected) {
+  for (const key of Object.keys(expected)) {
+    if (expected[key] === null) {
+      assert.equal(actual[key], null, `${key} should remain absent`);
+    } else {
+      assert.deepEqual(actual[key], expected[key], `${key} bytes changed`);
+    }
+  }
+}
+
+function failAt(expectedStage) {
+  return (stage) => {
+    if (stage === expectedStage) {
+      throw new Error(`injected ${stage} failure`);
+    }
+  };
+}
+
 function lastEventOfType(events, type) {
   for (let i = events.length - 1; i >= 0; i -= 1) {
     if (events[i].type === type) {
@@ -82,6 +118,61 @@ const T0_PLUS_30 = "2026-07-14T10:30:00+08:00";
 const T0_PLUS_31 = "2026-07-14T10:31:00+08:00";
 const T0_PLUS_60 = "2026-07-14T11:00:00+08:00";
 
+test("task mutation lock validates task before creating its sentinel", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    assert.throws(
+      () => acquireLease(project, {
+        taskId: "20260714-missing-task",
+        holder: "session-a",
+        minutes: 30,
+        now: T0,
+      }),
+      (error) => error instanceof TaskStateError && error.code === "TASK_NOT_FOUND",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test("task mutation lock serializes competing operations and cleans up", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    let competingError = null;
+
+    withTaskMutationLock(project, taskId, () => {
+      try {
+        acquireLease(project, {
+          taskId,
+          holder: "session-b",
+          minutes: 30,
+          now: T0,
+        });
+      } catch (error) {
+        competingError = error;
+      }
+    });
+
+    assert.ok(competingError instanceof TaskStateError);
+    assert.equal(competingError.code, "LEASE_HELD");
+    assert.equal(existsSync(taskPath(project, taskId, ".task-state.lock")), false);
+
+    const lease = acquireLease(project, {
+      taskId,
+      holder: "session-a",
+      minutes: 30,
+      now: T0,
+    });
+    assert.equal(lease.holder, "session-a");
+  } finally {
+    cleanup();
+  }
+});
+
 test("acquireLease grants a lease and rejects a concurrent acquisition", () => {
   const { project, cleanup } = freshProject();
   try {
@@ -95,6 +186,19 @@ test("acquireLease grants a lease and rejects a concurrent acquisition", () => {
       now: T0,
     });
     assert.equal(first.holder, "session-a");
+    assert.deepEqual(Object.keys(JSON.parse(readFileSync(
+      taskPath(project, "20260714-checkout-responsive", "lease.json"),
+      "utf8",
+    ))).sort(), [
+      "acquiredAt",
+      "expiresAt",
+      "heartbeatAt",
+      "holder",
+      "mode",
+      "stateRevision",
+      "taskId",
+    ]);
+    assert.equal(first.mode, "WRITE");
     assert.equal(first.taskId, "20260714-checkout-responsive");
     assert.equal(first.stateRevision, 0);
     assert.equal(first.acquiredAt, T0);
@@ -737,6 +841,258 @@ test("checkpointTask persists state, index, and event atomically", () => {
     assert.ok(approval);
     assert.equal(approval.revision, 1);
     assert.equal(approval.details.gateStatus, "PASS");
+  } finally {
+    cleanup();
+  }
+});
+
+test("lease event write failures restore lease and events byte-for-byte", () => {
+  for (const operation of ["acquire", "takeover", "release"]) {
+    const { project, cleanup } = freshProject();
+    try {
+      initProject(project);
+      createTask(project);
+      const taskId = "20260714-checkout-responsive";
+      if (operation !== "acquire") {
+        acquireLease(project, {
+          taskId,
+          holder: "session-a",
+          minutes: 30,
+          now: T0,
+        });
+      }
+      const before = fileSnapshot(project, taskId);
+      const call = operation === "acquire"
+        ? () => acquireLease(project, {
+            taskId,
+            holder: "session-a",
+            minutes: 30,
+            now: T0,
+            fail: failAt("event"),
+          })
+        : operation === "takeover"
+          ? () => takeoverLease(project, {
+              taskId,
+              newHolder: "session-b",
+              minutes: 30,
+              now: T0_PLUS_15,
+              userApproved: true,
+              fail: failAt("event"),
+            })
+          : () => releaseLease(project, {
+              taskId,
+              holder: "session-a",
+              now: T0_PLUS_15,
+              fail: failAt("event"),
+            });
+
+      assert.throws(call, (error) =>
+        error instanceof TaskStateError &&
+        error.code === "STATE_INVALID" &&
+        error.details.stage === "event",
+      );
+      assertSnapshotEqual(fileSnapshot(project, taskId), before);
+    } finally {
+      cleanup();
+    }
+  }
+});
+
+test("corrupted task state fails lease events closed", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    writeFileSync(taskPath(project, taskId, "state.json"), "{not-json\n");
+    const beforeEvents = readFileSync(taskPath(project, taskId, "events.jsonl"));
+
+    assert.throws(
+      () => acquireLease(project, { taskId, holder: "session-a", minutes: 30, now: T0 }),
+      (error) => error instanceof TaskStateError && error.code === "STATE_INVALID",
+    );
+    assert.deepEqual(readFileSync(taskPath(project, taskId, "events.jsonl")), beforeEvents);
+    assert.equal(existsSync(taskPath(project, taskId, "lease.json")), false);
+  } finally {
+    cleanup();
+  }
+});
+
+test("lease event IDs are deterministic monotonic E-#### values", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    acquireLease(project, { taskId, holder: "session-a", minutes: 30, now: T0 });
+    releaseLease(project, { taskId, holder: "session-a", now: T0_PLUS_15 });
+    const ids = readEvents(project, taskId).map((event) => event.eventId);
+    assert.deepEqual(ids, ["E-0001", "E-0002", "E-0003"]);
+  } finally {
+    cleanup();
+  }
+});
+
+test("checkpoint rolls back every file byte-for-byte for each failed stage", () => {
+  for (const stage of ["event", "recovery", "state", "index", "heartbeat"]) {
+    const { project, cleanup } = freshProject();
+    try {
+      initProject(project);
+      createTask(project);
+      const taskId = "20260714-checkout-responsive";
+      acquireLease(project, { taskId, holder: "session-a", minutes: 30, now: T0 });
+      const before = fileSnapshot(project, taskId);
+
+      const result = checkpointTask(project, {
+        taskId,
+        session: "session-a",
+        expectedRevision: 0,
+        now: T0_PLUS_15,
+        event: { type: "WORKFLOW_ENTERED" },
+        nextState: { status: "READY", currentWorkflow: "1" },
+        recovery: { nextAction: "Run live status checks", lastCheckpoint: "wf-1-entered" },
+        fail: failAt(stage),
+      });
+
+      assert.equal(result.ok, false, stage);
+      assert.equal(result.error.code, "STATE_INVALID", stage);
+      assert.equal(result.error.details.stage, stage);
+      assert.deepEqual(result.error.details.rollbackFailures, []);
+      assertSnapshotEqual(fileSnapshot(project, taskId), before);
+      assert.equal(readState(project, taskId).revision, 0);
+    } finally {
+      cleanup();
+    }
+  }
+});
+
+test("checkpoint persists next action and returns renewed lease at new revision", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    acquireLease(project, { taskId, holder: "session-a", minutes: 30, now: T0 });
+
+    const result = checkpointTask(project, {
+      taskId,
+      session: "session-a",
+      expectedRevision: 0,
+      now: T0_PLUS_15,
+      event: { type: "WORKFLOW_ENTERED" },
+      nextState: { status: "READY", currentWorkflow: "1" },
+      recovery: { nextAction: "Run live status checks", lastCheckpoint: "wf-1-entered" },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.lease.heartbeatAt, T0_PLUS_15);
+    assert.equal(result.lease.expiresAt, "2026-07-14T10:45:00+08:00");
+    assert.equal(result.lease.stateRevision, 1);
+    const recovery = readFileSync(taskPath(project, taskId, "recovery.md"), "utf8");
+    assert.match(recovery, /## Next action\n\nRun live status checks\n/);
+    assert.equal((recovery.match(/^## Next action$/gm) ?? []).length, 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test("ordinary renew synchronizes stateRevision from validated task state", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    acquireLease(project, { taskId, holder: "session-a", minutes: 30, now: T0 });
+    const state = readState(project, taskId);
+    writeFileSync(taskPath(project, taskId, "state.json"), JSON.stringify({ ...state, revision: 7 }) + "\n");
+    const renewed = renewLease(project, {
+      taskId,
+      holder: "session-a",
+      minutes: 30,
+      now: T0_PLUS_15,
+    });
+    assert.equal(renewed.stateRevision, 7);
+  } finally {
+    cleanup();
+  }
+});
+
+test("CLI acquire renew checkpoint and release default to the real clock", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const common = ["--task", "20260714-checkout-responsive", "--session", "session-a", "--json"];
+
+    const acquired = runCli(project, ["acquire", ...common]);
+    assert.equal(acquired.status, 0, acquired.stderr);
+    const renewed = runCli(project, ["renew", ...common]);
+    assert.equal(renewed.status, 0, renewed.stderr);
+    const checkpointed = runCli(project, [
+      "checkpoint",
+      ...common,
+      "--expected-revision",
+      "0",
+      "--event",
+      "WORKFLOW_ENTERED",
+      "--workflow",
+      "1",
+      "--status",
+      "READY",
+      "--next-action",
+      "Run live status checks",
+    ]);
+    assert.equal(checkpointed.status, 0, checkpointed.stderr);
+    const released = runCli(project, ["release", ...common]);
+    assert.equal(released.status, 0, released.stderr);
+  } finally {
+    cleanup();
+  }
+});
+
+test("CLI checkpoint accepts --event alias and rejects conflicting event flags", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    let acquire = runCli(project, [
+      "acquire", "--task", taskId, "--session", "session-a", "--now", T0, "--json",
+    ]);
+    assert.equal(acquire.status, 0, acquire.stderr);
+    const conflict = runCli(project, [
+      "checkpoint", "--task", taskId, "--session", "session-a",
+      "--expected-revision", "0", "--event", "WORKFLOW_ENTERED",
+      "--event-type", "APPROVAL_RECORDED", "--workflow", "1", "--status", "READY",
+      "--now", T0_PLUS_15, "--json",
+    ]);
+    assert.equal(conflict.status, 2);
+    assert.equal(JSON.parse(conflict.stderr).error.code, "STATE_INVALID");
+  } finally {
+    cleanup();
+  }
+});
+
+test("CLI checkpoint rejects detail types that cannot be represented safely", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    initProject(project);
+    createTask(project);
+    const taskId = "20260714-checkout-responsive";
+    const acquire = runCli(project, [
+      "acquire", "--task", taskId, "--session", "session-a", "--now", T0, "--json",
+    ]);
+    assert.equal(acquire.status, 0, acquire.stderr);
+    const result = runCli(project, [
+      "checkpoint", "--task", taskId, "--session", "session-a",
+      "--expected-revision", "0", "--event", "WORKFLOW_ENTERED",
+      "--workflow", "1", "--status", "READY", "--detail-batch", "1",
+      "--now", T0_PLUS_15, "--json",
+    ]);
+    assert.equal(result.status, 2);
+    const envelope = JSON.parse(result.stderr);
+    assert.equal(envelope.error.code, "STATE_INVALID");
+    assert.match(envelope.error.message, /cannot be represented safely/);
   } finally {
     cleanup();
   }
