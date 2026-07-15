@@ -597,8 +597,8 @@ test("reflect writes .figma/feedback/<timestamp>.md with the two table headers",
     assert.ok(existsSync(feedbackPath), `expected ${feedbackPath}`);
     const body = readFileSync(feedbackPath, "utf8");
     assert.ok(body.length > 0);
-    assert.match(body, /^# figma-skill v2\.1 Self-Reflection/m);
-    assert.match(body, /<!-- skill-version: 2\.1 -->/);
+    assert.match(body, /^# figma-skill v2\.2 Self-Reflection/m);
+    assert.match(body, /<!-- skill-version: 2\.2 -->/);
     assert.ok(body.includes("问题列表"), "must include 问题列表 header");
     assert.ok(body.includes("优化方向"), "must include 优化方向 header");
   } finally {
