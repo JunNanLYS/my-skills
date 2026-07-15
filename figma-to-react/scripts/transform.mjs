@@ -98,7 +98,9 @@ function mapNode(astNode) {
     if (k in props) node.style = { ...node.style, [k]: props[k] };
   }
 
-  // Text-specific
+  // Text-specific — return early without recursing into children.
+  // The parser wraps text content in a {type:'Text', value} child; recursing
+  // would double-emit the text node as a phantom child in the IR's children array.
   if (mapped === 'text') {
     if (props.text) node.text = props.text;
     if (props.fontSize !== undefined) node.style.fontSize = props.fontSize;
@@ -112,6 +114,7 @@ function mapNode(astNode) {
       .join(' ')
       .trim();
     if (textContent) node.text = textContent;
+    return node;
   }
 
   // Image / vector

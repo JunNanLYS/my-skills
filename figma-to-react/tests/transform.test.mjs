@@ -41,3 +41,28 @@ test('transform rejects unknown element tag with a clear error', async () => {
   const bad = '<Unknown name="x" />';
   await assert.rejects(() => transformJsx(bad, { name: 'X' }), /Unknown Figma element/);
 });
+
+test('transform simple-frame → text node has no phantom text child', async () => {
+  const source = readFileSync(join(__dirname, 'fixtures', 'simple-frame.jsx'), 'utf8');
+  const ir = await transformJsx(source, { name: 'Button' });
+  const textNode = ir.root.children[1];
+  assert.equal(textNode.type, 'text');
+  assert.equal(textNode.text, 'Button label');
+  // Phantom child must not exist: children key absent or empty
+  assert.ok(
+    !('children' in textNode) || textNode.children.length === 0,
+    'text node must not have a phantom text child in children'
+  );
+});
+
+test('transform nested-frames → body text node has no phantom text child', async () => {
+  const source = readFileSync(join(__dirname, 'fixtures', 'nested-frames.jsx'), 'utf8');
+  const ir = await transformJsx(source, { name: 'Card' });
+  const bodyNode = ir.root.children[1];
+  assert.equal(bodyNode.type, 'text');
+  assert.equal(bodyNode.text, 'This is a longer description that wraps onto two lines.');
+  assert.ok(
+    !('children' in bodyNode) || bodyNode.children.length === 0,
+    'text node must not have a phantom text child in children'
+  );
+});
