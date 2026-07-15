@@ -1,6 +1,6 @@
 # Geometry Verifier Pipeline (Workflow 9 / 10)
 
-Workflow 9 Geometry 层的可执行管线。六道闸门按顺序运行，任一 FAIL 立即停止验收并回到 Workflow 10。
+Workflow 9 Geometry 层的可执行管线。七道闸门按顺序运行，任一 FAIL 立即停止验收并回到 Workflow 10。
 
 ## Gate 1 — Lint
 
@@ -47,6 +47,55 @@ Workflow 9 Geometry 层的可执行管线。六道闸门按顺序运行，任一
 - FAIL 条件: 任何视觉问题未修复
 - 视觉结论必须写入 `state.validation.visual.summary` 或 `final-summary.md`
 
+## Gate 7 — Containment (v2.2+)
+
+**触发条件:** 任意 Section / Frame / Component / Instance 的 `clipsContent=true` 且至少有一个子节点的 `absoluteBoundingBox` 不完全包含在父节点的 `absoluteBoundingBox` 内。
+
+**命令:** `figma-cli run scripts/overlap-check.mjs`，修改入口常量：
+- `PARENT_IDS = [...]`（目标 Section / Frame / Component NodeId 列表）
+- `GATE = "containment"`
+- `CLIP_WHITELIST = [{ nodeId, rationale }, ...]`（来自 `plan.md##ClipWhitelist`）
+
+**算法:**
+
+```
+for parent in PARENT_IDS:
+  if !parent.clipsContent: continue       # 不裁切就不告警
+  if parent.id in CLIP_WHITELIST[*].nodeId:
+    log(INFO, "whitelisted", {parent, rationale})
+    continue
+  for child in parent.children:
+    cb = child.absoluteBoundingBox
+    pb = parent.absoluteBoundingBox
+    if cb.x < pb.x or cb.y < pb.y
+       or cb.x + cb.width  > pb.x + pb.width
+       or cb.y + cb.height > pb.y + pb.height:
+      side = (left | right | top | bottom) 从失败的不等式推导
+      overflowPx = 超出量
+      suggestedHeight = pb.height + overflowPx
+      emit ISSUE({ gate: "Containment", severity: "error",
+                   parentId, parentName, childId, childName,
+                   side, overflowPx, suggestedHeight,
+                   recommendation })
+```
+
+**Whitelist contract:** `plan.md` 必须包含 `## ClipWhitelist` 段（schema 由 `assertValidPlan` 校验）。每项 `{ nodeId, rationale }` 中 `rationale.length >= 5`。缺省视作空数组。
+
+**Gate 语义表:**
+
+| `clipsContent` | In `ClipWhitelist` | Result |
+| - | - | - |
+| `false` | n/a | PASS (skip) |
+| `true`  | yes | PASS (whitelisted) |
+| `true`  | no, 有超界子 | FAIL |
+| `true`  | no, 无超界子 | PASS |
+
+**多层嵌套:** 每个父独立检查；子节点的子节点超界 → 报告给子节点（直接父），不重复到祖父。这避免双重 FAIL。
+
+**默认策略:** `clipsContent=true` 视为危险。设计者必须通过 `plan.md##ClipWhitelist` 显式 opt-in 并提供 `rationale`（如 scroll container、内部 card）。
+
+**修复:** Workflow 10 收到 ISSUE 后，决定 (a) resize parent 到 `suggestedHeight`，(b) 重新设计不需要裁切，或 (c) 加 whitelist 项。auto-fix **不**自动执行。
+
 ## Output Matrices
 
 - LayoutMode 矩阵: 每个节点的 `layoutMode`（NONE / HORIZONTAL / VERTICAL）
@@ -61,7 +110,8 @@ Workflow 9 Geometry 层的可执行管线。六道闸门按顺序运行，任一
 2. Top-level 重叠: 节点改到 `figma-cli canvas next` 推荐坐标
 3. Section 内重叠: `apply-layout.mjs` 一次性应用新坐标 + `overlap-check.mjs` 重检
 4. Variant 不一致: 重新 clone 基线再修改
-5. 文字裁切: Visual 层修正
+5. Containment FAIL: resize parent 到 `suggestedHeight`，或加 `ClipWhitelist` 项（必须有 `rationale >= 5` 字符）
+6. 文字裁切: Visual 层修正
 
 每步必须重新跑对应命令验证通过再进入下一轮，最多三轮。超过三轮立即停止写入。
 
