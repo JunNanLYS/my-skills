@@ -131,7 +131,7 @@ export async function transformJsx(source, options = {}) {
   const ast = parseJsx(source);
   const root = mapNode(ast);
   const ir = {
-    name: options.name || (root.name || 'Component'),
+    name: root.name || options.name || 'Component',
     root,
     bridges: [],
   };
