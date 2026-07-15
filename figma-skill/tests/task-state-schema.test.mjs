@@ -114,6 +114,8 @@ test("exports stable task-state error codes and constants", () => {
     "SENSITIVE_DATA_REJECTED",
     "PATH_OUTSIDE_PROJECT",
     "ARCHIVE_FAILED",
+    "SELF_REFLECTION_FAILED",
+    "SKILL_VERSION_MISMATCH",
   ]);
   assert.ok(Object.isFrozen(ERROR_CODES));
   assert.ok(Object.isFrozen(TASK_STATUSES));

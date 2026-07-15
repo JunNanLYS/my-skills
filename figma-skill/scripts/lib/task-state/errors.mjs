@@ -14,6 +14,8 @@ export const ERROR_CODES = Object.freeze([
   "SENSITIVE_DATA_REJECTED",
   "PATH_OUTSIDE_PROJECT",
   "ARCHIVE_FAILED",
+  "SELF_REFLECTION_FAILED",
+  "SKILL_VERSION_MISMATCH",
 ]);
 
 export class TaskStateError extends Error {

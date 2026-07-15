@@ -567,3 +567,55 @@ test("invalid args without --json exit with code 2 and a stderr message", () => 
     cleanup();
   }
 });
+
+test("usage banner advertises reflect along with other subcommands", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    const result = run(project, ["--help"]);
+    assert.equal(result.status, 2);
+    assert.ok(
+      result.stderr.includes("reflect"),
+      "usage banner must mention reflect",
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test("reflect writes .figma/feedback/<timestamp>.md with the two table headers", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    const result = run(project, [
+      "reflect",
+      "--now",
+      "2026-07-15T20:00:00+08:00",
+    ]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.ok(result.stdout.includes("reflect "), result.stdout);
+    const expectedName = "2026-07-15T20-00-00.md";
+    const feedbackPath = join(project, ".figma", "feedback", expectedName);
+    assert.ok(existsSync(feedbackPath), `expected ${feedbackPath}`);
+    const body = readFileSync(feedbackPath, "utf8");
+    assert.ok(body.length > 0);
+    assert.match(body, /^# figma-skill v2\.1 Self-Reflection/m);
+    assert.match(body, /<!-- skill-version: 2\.1 -->/);
+    assert.ok(body.includes("问题列表"), "must include 问题列表 header");
+    assert.ok(body.includes("优化方向"), "must include 优化方向 header");
+  } finally {
+    cleanup();
+  }
+});
+
+test("reflect rejects mismatching --skill-version with SKILL_VERSION_MISMATCH", () => {
+  const { project, cleanup } = freshProject();
+  try {
+    const result = run(project, ["reflect", "--skill-version", "9.9"]);
+    assert.equal(result.status, 2, result.stderr);
+    assert.ok(
+      result.stderr.includes("SKILL_VERSION_MISMATCH"),
+      `stderr was: ${result.stderr}`,
+    );
+  } finally {
+    cleanup();
+  }
+});

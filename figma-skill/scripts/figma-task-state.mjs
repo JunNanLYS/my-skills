@@ -19,7 +19,7 @@
  *   2  invalid input or state
  */
 
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -702,6 +702,108 @@ function validateLedger({ projectRoot, json }) {
   };
 }
 
+// runReflect — implements Workflow 12 self-reflection.  Writes
+// .figma/feedback/<timestamp>.md with the two required table headers and
+// validates skill-version matches SKILL.md.
+const SELF_REFLECTION_TEMPLATE = (skillVersion, lines = 4) => `# figma-skill v${skillVersion} Self-Reflection
+<!-- skill-version: ${skillVersion} -->
+
+## 1. 问题列表 (Problems)
+
+| # | 问题 | 出现的 Workflow | 影响 |
+| - | ---- | ---------------- | ---- |
+${[...Array(lines).keys()].map((i) => `| ${i + 1} | ...  | Workflow 6       | ...  |`).join("\n")}
+
+## 2. 优化方向 (Optimization Directions)
+
+| # | 优化方向 | 优先级 | 关联问题 |
+| - | -------- | ------ | -------- |
+${[...Array(lines).keys()].map((i) => `| ${i + 1} | ...      | P1     | 问题 #${i + 1}  |`).join("\n")}
+`;
+
+function readSkillVersion() {
+  const skillPath = join(SKILL_ROOT, "SKILL.md");
+  const body = readFileSync(skillPath, "utf8");
+  const fm = body.match(/^---\r?\n([\s\S]+?)\r?\n---/);
+  if (!fm) {
+    throw new TaskStateError(
+      "SELF_REFLECTION_FAILED",
+      "SKILL.md frontmatter missing; cannot resolve skill version",
+    );
+  }
+  const versionLine = fm[1].split("\n").find((l) => l.startsWith("version:"));
+  if (!versionLine) {
+    throw new TaskStateError(
+      "SELF_REFLECTION_FAILED",
+      "SKILL.md frontmatter has no version field",
+    );
+  }
+  return versionLine.replace(/^version:\s*/, "").trim();
+}
+
+function timestampSafe(now = new Date()) {
+  const pad = (n) => String(n).padStart(2, "0");
+  return (
+    `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}` +
+    `T${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
+  );
+}
+
+function runReflect({ projectRoot, flags, json }) {
+  const skillVersion = readSkillVersion();
+  const requestVersion = flags["skill-version"];
+  if (requestVersion && requestVersion !== skillVersion) {
+    throw new TaskStateError(
+      "SKILL_VERSION_MISMATCH",
+      `--skill-version ${requestVersion} does not match SKILL.md version ${skillVersion}`,
+      { requested: requestVersion, actual: skillVersion },
+    );
+  }
+  const feedbackDir = join(projectRoot, ".figma", "feedback");
+  if (!existsSync(feedbackDir)) {
+    mkdirSync(feedbackDir, { recursive: true });
+  }
+  const nowArg = flags.now && flags.now !== true ? flags.now : null;
+  const stamp = nowArg
+    ? timestampSafe(new Date(nowArg))
+    : timestampSafe();
+  const requested = flags.output && flags.output !== true ? flags.output : null;
+  const relativePath = requested ? requested : `${stamp}.md`;
+  const outputPath = relativePath.startsWith("/") || /^[A-Za-z]:/.test(relativePath)
+    ? relativePath
+    : join(feedbackDir, relativePath);
+  if (!outputPath.startsWith(feedbackDir)) {
+    throw new TaskStateError(
+      "PATH_OUTSIDE_PROJECT",
+      `output path must live under ${feedbackDir}`,
+      { outputPath, feedbackDir },
+    );
+  }
+  const body = SELF_REFLECTION_TEMPLATE(skillVersion);
+  writeFileSync(outputPath, body, "utf8");
+  const stat = statSync(outputPath);
+  if (stat.size === 0 || !body.includes("问题列表") || !body.includes("优化方向")) {
+    writeFileSync(outputPath, "", "utf8");
+    throw new TaskStateError(
+      "SELF_REFLECTION_FAILED",
+      "Self-reflection file did not include the two required tables",
+      { outputPath, size: stat.size },
+    );
+  }
+  return {
+    envelope: {
+      ok: true,
+      command: "reflect",
+      data: {
+        outputPath,
+        size: stat.size,
+        skillVersion,
+      },
+    },
+    json,
+  };
+}
+
 function runCommand(name, runner) {
   const args = parseArgs(process.argv.slice(2));
   const json = args.flags.json === true;
@@ -752,6 +854,7 @@ function handleError(error, command, json) {
       "LIVE_REVALIDATION_REQUIRED",
       "EVIDENCE_MISSING",
       "ARCHIVE_FAILED",
+      "SKILL_VERSION_MISMATCH",
     ];
     if (inputErrorCodes.includes(error.code)) {
       process.exit(2);
@@ -850,6 +953,12 @@ function humanOutput(envelope) {
         process.stdout.write(`  ${issue.severity}: [${issue.code}] ${issue.message}\n`);
       }
     }
+    return;
+  }
+  if (envelope.command === "reflect") {
+    process.stdout.write(
+      `reflect ${data.outputPath} size=${data.size} skill-version=${data.skillVersion}\n`,
+    );
     return;
   }
   process.stdout.write(JSON.stringify(envelope, null, 2) + "\n");
@@ -967,9 +1076,14 @@ function dispatch(args) {
         };
       });
       return;
+    case "reflect":
+      runCommand("reflect", ({ projectRoot, flags, json }) => {
+        return runReflect({ projectRoot, flags, json });
+      });
+      return;
     default:
       process.stderr.write(
-        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint|evidence-add|screenshot-add|validate|archive|close> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\narchive requires --task <id> --holder <session> [--expected-revision <N>] [--terminal-status <STATUS>] [--now <ISO>]\nclose requires --task <id> --holder <session> [--now <ISO>]\n`,
+        `usage: figma-task-state.mjs <init-project|create|list|show|acquire|renew|takeover|release|checkpoint|evidence-add|screenshot-add|todo-add|todo-update|validate|archive|close|reflect> --project <root> [--json]\ncheckpoint requires --event <EVENT_TYPE> (--event-type is a compatible alias)\narchive requires --task <id> --holder <session> [--expected-revision <N>] [--terminal-status <STATUS>] [--now <ISO>]\nclose requires --task <id> --holder <session> [--now <ISO>]\nreflect writes .figma/feedback/<timestamp>.md and validates --skill-version matches SKILL.md.\n`,
       );
       process.exit(2);
   }

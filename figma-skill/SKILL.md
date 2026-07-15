@@ -149,8 +149,8 @@ Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLE
 
 - 存储路径：`<Current workspace>/.figma/feedback/<timestamp>.md`，其中 `<timestamp>` 使用 ISO 8601 文件名安全形式（`YYYY-MM-DDTHH-MM-SS`，本地时区），文件名为单一时间戳，不含 task id。
 - 文件首行必须以 `# figma-skill v2.1 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 2.1 -->` 注释；以下为问题与优化方向两个表。
-- 问题列表表头：`# | 问题 | 出现的 Workflow | 影响`。每行写一个具体观察。
-- 优化方向表头：`# | 优化方向 | 优先级 | 关联问题`。每行写一条可执行改进，优先级只允许 `P0 / P1 / P2`。
+- 问题列表表头：`# | 问题 | 出现的 Workflow | 影响`。每行写一个具体观察（例如："Workflow 6 审批后立即 ack，没有要求 plan.md 重新打开"。）。
+- 优化方向表头：`# | 优化方向 | 优先级 | 关联问题`。每行写一条可执行改进（例如："将 plan 重读纳入 Workflow 8 起步动作"。优先级只允许 `P0 / P1 / P2`。
 - 两个表必须同时存在；缺少任何一张视为本 Workflow `Gate=FAIL` 并触发一次重新自省，禁止直接关闭会话。
 - `SelfReflectionGate` 默认 `PASS` 即写文件；只有文件落盘、`size > 0`、包含两个表头子串、且首行版本字串匹配当前 `version` 才允许声明 PASS。
 - 自省文件不需要 `.figma/tasks/<task-id>/` 任何现有写入；`.figma/feedback/` 是跨任务、跨会话的全局目录，由 `figma-task-state.mjs reflect` 创建或追加。
