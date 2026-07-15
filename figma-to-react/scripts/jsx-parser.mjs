@@ -27,75 +27,131 @@ function parseProps(attrString) {
   return props;
 }
 
+function findTagAt(source, pos) {
+  // Return the next open or close tag that starts exactly at 'pos', or null.
+  // Uses indexOf to locate tags at the given position, avoiding lastIndex issues.
+  if (pos >= source.length) return null;
+  if (source[pos] !== '<') return null;
+  if (source[pos + 1] === '/') {
+    const m = CLOSE_TAG_RE.exec(source.slice(pos));
+    if (m && m.index === 0) {
+      return { type: 'close', tag: m[1], length: m[0].length };
+    }
+  } else {
+    const m = TAG_RE.exec(source.slice(pos));
+    if (m && m.index === 0) {
+      return { type: 'open', tag: m[1], length: m[0].length,
+               attrString: m[2], isSelfClosing: m[0].endsWith('/>') };
+    }
+  }
+  return null;
+}
+
+function findNextTag(source, pos) {
+  // Return the earliest open or close tag at or after 'pos'.
+  // Finds all tags in the remaining substring and picks the one with the smallest index.
+  let earliestPos = Infinity;
+  let earliestTag = null;
+
+  for (const m of source.slice(pos).matchAll(/<(\/?)([A-Z][A-Za-z0-9]*)\b([^>]*?)(\/?)>/g)) {
+    const tagPos = pos + m.index;
+    if (tagPos < earliestPos) {
+      earliestPos = tagPos;
+      if (m[1] === '/') {
+        earliestTag = { type: 'close', tag: m[2], length: m[0].length, index: tagPos };
+      } else {
+        earliestTag = { type: 'open', tag: m[2], length: m[0].length,
+                       attrString: m[3], isSelfClosing: m[4] === '/', index: tagPos };
+      }
+    }
+  }
+  return earliestTag || null;
+}
+
 function tokenize(source) {
   // Returns an ordered list of tokens: open tags, close tags, and text.
   const tokens = [];
   let cursor = 0;
+  let depth = 0;
 
   while (cursor < source.length) {
-    TAG_RE.lastIndex = 0;
-    CLOSE_TAG_RE.lastIndex = 0;
-    const openMatch = TAG_RE.exec(source.slice(cursor));
-    if (!openMatch) {
+    // Find the next tag at or after cursor.
+    const nextTag = findNextTag(source, cursor);
+    if (!nextTag) {
       const rest = source.slice(cursor);
       if (rest.trim().length > 0) {
         tokens.push({ type: 'text', value: rest });
       }
       break;
     }
-    const openIndex = cursor + openMatch.index;
-    if (openIndex > cursor) {
-      const between = source.slice(cursor, openIndex);
+
+    // Text between cursor and the next tag.
+    if (nextTag.index > cursor) {
+      const between = source.slice(cursor, nextTag.index);
       if (between.trim().length > 0) {
         tokens.push({ type: 'text', value: between });
       }
     }
 
-    const tag = openMatch[1];
-    const attrString = openMatch[2];
-    const isSelfClosing = openMatch[0].endsWith('/>');
-    tokens.push({ type: 'open', tag, props: parseProps(attrString), selfClosing: isSelfClosing });
+    cursor = nextTag.index;
 
-    cursor = openIndex + openMatch[0].length;
+    if (nextTag.type === 'open') {
+      const openIndex = cursor;
+      const openLength = nextTag.length;
+      tokens.push({ type: 'open', tag: nextTag.tag,
+                    props: parseProps(nextTag.attrString),
+                    selfClosing: nextTag.isSelfClosing });
 
-    if (!isSelfClosing) {
-      // Find matching close tag, respecting nesting.
-      let depth = 1;
-      let closeEnd = -1;
-      let closeStart = -1;
-      while (depth > 0) {
-        const next = CLOSE_TAG_RE.exec(source);
-        if (!next) break;
-        if (next[0].toLowerCase() === '</' + tag.toLowerCase() + '>') {
-          depth -= 1;
-          if (depth === 0) {
-            closeStart = next.index;
-            closeEnd = closeStart + next[0].length;
-            break;
-          }
-        } else {
-          // Nested open tag of the same name?
-          const openMatch = TAG_RE.exec(source.slice(next.index));
-          if (openMatch && openMatch[0].startsWith('<' + tag) && !openMatch[0].endsWith('/>')) {
-            depth += 1;
+      if (!nextTag.isSelfClosing) {
+        // Scan forward to find the matching close tag, counting ALL open/close nesting.
+        let scanCursor = openIndex + openLength;
+        let closeStart = -1;
+        let closeEnd = -1;
+        let innerDepth = 1;
+
+        while (innerDepth > 0) {
+          const innerTag = findNextTag(source, scanCursor);
+          if (!innerTag) break;
+
+          if (innerTag.type === 'close') {
+            scanCursor = innerTag.index + innerTag.length;
+            if (innerDepth === 1) {
+              // Found the matching close tag for this element.
+              closeStart = innerTag.index;
+              closeEnd = scanCursor;
+            }
+            innerDepth -= 1;
+          } else {
+            // Open tag (possibly self-closing).
+            if (!innerTag.isSelfClosing) {
+              innerDepth += 1;
+            }
+            scanCursor = innerTag.index + innerTag.length;
           }
         }
-      }
-      if (closeStart === -1) {
-        throw new Error(`Unclosed <${tag}> at offset ${openIndex}`);
-      }
-      if (closeStart > cursor) {
-        const inner = source.slice(cursor, closeStart);
-        // Recursively tokenize the inner content
+
+        if (closeStart === -1) {
+          throw new Error(`Unclosed <${nextTag.tag}> at offset ${openIndex}`);
+        }
+
+        // Recursively tokenize the inner content between the open and close tags.
+        const inner = source.slice(openIndex + openLength, closeStart);
         const innerTokens = tokenize(inner);
         tokens.push(...innerTokens);
-      }
-      tokens.push({ type: 'close', tag });
-      cursor = closeEnd;
-    }
 
-    TAG_RE.lastIndex = cursor;
-    CLOSE_TAG_RE.lastIndex = cursor;
+        tokens.push({ type: 'close', tag: nextTag.tag });
+        cursor = closeEnd;
+      } else {
+        cursor = openIndex + openLength;
+      }
+    } else {
+      // nextTag.type === 'close'
+      if (depth > 0) {
+        tokens.push({ type: 'close', tag: nextTag.tag });
+        depth -= 1;
+      }
+      cursor = nextTag.index + nextTag.length;
+    }
   }
 
   return tokens;
