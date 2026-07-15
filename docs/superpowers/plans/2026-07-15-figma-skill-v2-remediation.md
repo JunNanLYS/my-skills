@@ -24,94 +24,130 @@
 
 ---
 
-## Task 1: Add `plan.clipWhitelist` to task-state schema
+## Task 1: Add `plan.clipWhitelist` to plan validation helper
 
 **Files:**
-- Modify: `figma-skill/schemas/task-state.schema.json`
-- Test: `figma-skill/tests/task-state-schema.test.mjs`
+- Modify: `figma-skill/scripts/lib/task-state/validate.mjs` (add `assertValidPlan` for the parsed plan markdown)
+- Modify: `figma-skill/scripts/lib/task-state/model.mjs` (export `CLIP_WHITELIST_SCHEMA` if needed)
+- Test: `figma-skill/tests/plan-clipwhitelist.test.mjs` (new file)
+
+**Discovery (plan review):** The existing `task-state.schema.json` validates only `state.json` / `index.json` / `event.json` — it has no `plan` top-level field. `plan.md` is markdown, not validated by JSON schema. Therefore `clipWhitelist` is best enforced via a small `assertValidPlan` helper that parses the parsed plan object. The plan object shape is determined by `references/planning.md` (Required Fields Quick Map). This task adds the helper.
 
 **Interfaces:**
-- Consumes: existing `plan` schema definition
-- Produces: `plan.clipWhitelist` field accepting `{ nodeId: string, rationale: string (minLength 5) }[]`. Absent → treated as `[]`.
+- Consumes: parsed `plan.md` as `{ clipWhitelist: Array<{nodeId, rationale}>, writeOrder: Array<{step, command}> }` (shape mirrors Required Fields Quick Map; absent fields default to `[]`)
+- Produces: `assertValidPlan(plan)` — throws `TaskStateError("PLAN_INVALID", ...)` on violation; returns plan on success.
 
-- [ ] **Step 1: Write failing test for `plan.clipWhitelist`**
+- [ ] **Step 1: Write failing test for `assertValidPlan`**
 
-Add to `figma-skill/tests/task-state-schema.test.mjs` (create the file if it does not exist):
+Create `figma-skill/tests/plan-clipwhitelist.test.mjs`:
 
 ```javascript
-import { validate } from "../scripts/lib/task-state/validate.mjs";
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { assertValidPlan } from "../scripts/lib/task-state/validate.mjs";
+import { TaskStateError } from "../scripts/lib/task-state/errors.mjs";
 
-const basePlan = {
-  taskId: "20260715-test",
-  workflow: "Workflow 6",
-  gates: { WritePlanGate: "PENDING" },
+const goodPlan = {
   clipWhitelist: [
     { nodeId: "1741:439", rationale: "Library preview card — internal scroll is intentional" },
   ],
+  writeOrder: [
+    { step: 1, command: "figma-cli create section --name \"News\" --parent P1 --check-exists" },
+  ],
 };
 
-export async function testClipWhitelistAccepted() {
-  const result = await validate({ plan: basePlan });
-  if (!result.ok) throw new Error("expected clipWhitelist to be accepted, got: " + JSON.stringify(result));
-  return { ok: true };
-}
+test("accepts plan with valid clipWhitelist and writeOrder", () => {
+  assert.doesNotThrow(() => assertValidPlan(goodPlan));
+});
 
-export async function testClipWhitelistRejectsShortRationale() {
-  const bad = JSON.parse(JSON.stringify(basePlan));
-  bad.plan.clipWhitelist = [{ nodeId: "1:2", rationale: "no" }]; // 2 chars, < 5
-  const result = await validate({ plan: bad });
-  if (result.ok) throw new Error("expected short rationale to be rejected, got ok=true");
-  return { ok: true };
-}
+test("accepts plan with empty clipWhitelist and writeOrder (default-deny)", () => {
+  assert.doesNotThrow(() => assertValidPlan({ clipWhitelist: [], writeOrder: [] }));
+});
 
-export async function testClipWhitelistOptional() {
-  const noWL = JSON.parse(JSON.stringify(basePlan));
-  delete noWL.plan.clipWhitelist;
-  const result = await validate({ plan: noWL });
-  if (!result.ok) throw new Error("expected absent clipWhitelist to be accepted, got: " + JSON.stringify(result));
-  return { ok: true };
-}
+test("accepts plan with absent clipWhitelist and writeOrder (treated as empty)", () => {
+  assert.doesNotThrow(() => assertValidPlan({}));
+});
+
+test("rejects clipWhitelist entry with rationale shorter than 5 chars", () => {
+  assert.throws(
+    () => assertValidPlan({ clipWhitelist: [{ nodeId: "1:2", rationale: "no" }], writeOrder: [] }),
+    (err) => err instanceof TaskStateError && err.code === "PLAN_INVALID",
+  );
+});
+
+test("rejects clipWhitelist entry with missing nodeId", () => {
+  assert.throws(
+    () => assertValidPlan({ clipWhitelist: [{ rationale: "scroll container" }], writeOrder: [] }),
+    (err) => err instanceof TaskStateError && err.code === "PLAN_INVALID",
+  );
+});
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 2: Run test to verify it fails**
 
 Run from repo root:
 ```bash
-cd figma-skill && node --test tests/task-state-schema.test.mjs
+cd figma-skill && node --test tests/plan-clipwhitelist.test.mjs
 ```
-Expected: FAIL with "expected clipWhitelist to be accepted" (schema does not yet know the field).
+Expected: FAIL — `assertValidPlan` is not exported from `validate.mjs`.
 
-- [ ] **Step 3: Add `plan.clipWhitelist` to schema**
+- [ ] **Step 3: Add `assertValidPlan` to validate.mjs**
 
-Edit `figma-skill/schemas/task-state.schema.json`. Locate the `plan` definition and add:
+Append at the end of `figma-skill/scripts/lib/task-state/validate.mjs`:
 
-```json
-"clipWhitelist": {
-  "type": "array",
-  "items": {
-    "type": "object",
-    "required": ["nodeId", "rationale"],
-    "properties": {
-      "nodeId": { "type": "string" },
-      "rationale": { "type": "string", "minLength": 5 }
-    }
+```javascript
+export function assertValidPlan(value) {
+  function invalid(message, details = {}) {
+    throw new TaskStateError("PLAN_INVALID", message, details);
   }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    invalid("plan must be an object", { path: "plan" });
+  }
+  const clipWhitelist = Object.hasOwn(value, "clipWhitelist") ? value.clipWhitelist : [];
+  if (!Array.isArray(clipWhitelist)) {
+    invalid("plan.clipWhitelist must be an array", { path: "plan.clipWhitelist" });
+  }
+  clipWhitelist.forEach((entry, index) => {
+    const p = `plan.clipWhitelist[${index}]`;
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      invalid(`${p} must be an object`, { path: p });
+    }
+    if (typeof entry.nodeId !== "string" || entry.nodeId.length < 1) {
+      invalid(`${p}.nodeId must be a non-empty string`, { path: `${p}.nodeId` });
+    }
+    if (typeof entry.rationale !== "string" || entry.rationale.length < 5) {
+      invalid(`${p}.rationale must be a string of at least 5 characters`, { path: `${p}.rationale` });
+    }
+  });
+  const writeOrder = Object.hasOwn(value, "writeOrder") ? value.writeOrder : [];
+  if (!Array.isArray(writeOrder)) {
+    invalid("plan.writeOrder must be an array", { path: "plan.writeOrder" });
+  }
+  return value;
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [ ] **Step 4: Run test to verify it passes**
+
+Run:
+```bash
+cd figma-skill && node --test tests/plan-clipwhitelist.test.mjs
+```
+Expected: PASS (5 tests, 0 failures).
+
+- [ ] **Step 5: Run regression on existing schema tests**
 
 Run:
 ```bash
 cd figma-skill && node --test tests/task-state-schema.test.mjs
 ```
-Expected: PASS (3 tests, 0 failures).
+Expected: PASS — adding a new export does not break existing tests.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add figma-skill/schemas/task-state.schema.json figma-skill/tests/task-state-schema.test.mjs
-git commit -m "feat(figma-skill): add plan.clipWhitelist schema field"
+git add figma-skill/scripts/lib/task-state/validate.mjs figma-skill/tests/plan-clipwhitelist.test.mjs
+git commit -m "feat(figma-skill): add assertValidPlan for plan.clipWhitelist and plan.writeOrder"
 ```
 
 ---
@@ -1050,7 +1086,7 @@ Expected: 10 new commits visible on origin/main, ending with the green-results u
 | Spec section | Covered by |
 | - | - |
 | §5.1 Containment Gate algorithm | Task 2 (impl) + Task 3 (doc) |
-| §5.1 Whitelist contract | Task 1 (schema) + Task 5 (planning.md) |
+| §5.1 Whitelist contract | Task 1 (assertValidPlan helper) + Task 5 (planning.md) |
 | §5.1 Multi-level nesting | Task 2 Fixture 5 |
 | §5.2 `--check-exists` behavior | Task 7 (stub) + Task 8 (tests) |
 | §5.2 `--reuse` / `--strict` / `--rename` flags | Task 7 (stub impl) + Task 8 (tests) |
