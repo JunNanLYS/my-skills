@@ -16,6 +16,8 @@
   // ===== 在这里改 =====
   const PARENT_IDS = [];
   const OUTPUT_MODE = "json";
+  const GATE = ""; // "" | "containment"
+  const CLIP_WHITELIST = []; // [{ nodeId, rationale }]
   // ====================
 
   const issues = [];
@@ -89,6 +91,50 @@
     }
     allItems.push(...items);
 
+    // Containment Gate (Gate 7): when clipsContent=true, child overflow is silently clipped.
+    // Default-deny: any clipsContent=true parent not in CLIP_WHITELIST with overflowing child → FAIL.
+    if (GATE === "containment" && parent.clipsContent) {
+      const whitelisted = CLIP_WHITELIST.some((w) => w.nodeId === parent.id);
+      if (!whitelisted) {
+        const pb = parent.absoluteBoundingBox;
+        for (const item of items) {
+          let side = null;
+          let overflowPx = 0;
+          if (item.x < pb.x) {
+            side = "left";
+            overflowPx = pb.x - item.x;
+          } else if (item.y < pb.y) {
+            side = "top";
+            overflowPx = pb.y - item.y;
+          } else if (item.x + item.width > pb.x + pb.width) {
+            side = "right";
+            overflowPx = item.x + item.width - (pb.x + pb.width);
+          } else if (item.y + item.height > pb.y + pb.height) {
+            side = "bottom";
+            overflowPx = item.y + item.height - (pb.y + pb.height);
+          }
+          if (side) {
+            const suggestedHeight = pb.height + overflowPx;
+            issues.push({
+              gate: "Containment",
+              severity: "error",
+              parentId: parent.id,
+              parentName: parent.name,
+              childId: item.id,
+              childName: item.name,
+              side: side,
+              overflowPx: overflowPx,
+              suggestedHeight: suggestedHeight,
+              recommendation:
+                "Resize parent to height " +
+                suggestedHeight +
+                "px, or add parent.id to plan.md##ClipWhitelist with rationale.",
+            });
+          }
+        }
+      }
+    }
+
     // Pairwise intersection within this parent (strict inequalities)
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
@@ -160,16 +206,20 @@
     return lines.join("\n");
   }
 
+  const containmentIssues = issues.filter((i) => i.gate === "Containment");
+  const code = containmentIssues.length > 0 ? "CONTAINMENT_FAIL" : "OK";
   return JSON.stringify(
     {
-      ok: true,
-      code: "OK",
+      ok: containmentIssues.length === 0,
+      code: code,
       summary: {
         parents: PARENT_IDS.length,
         totalItems: allItems.length,
         overlapPairs: allPairs.length,
+        containmentFails: containmentIssues.length,
       },
       issues: issues,
+      containmentIssues: containmentIssues,
       observedAt: null,
       total: allItems.length,
       overlapPairs: allPairs.length,
