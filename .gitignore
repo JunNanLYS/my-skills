@@ -5,3 +5,10 @@ Thumbs.db
 .claude/worktrees/
 .superpowers/sdd/
 .figma/
+# Allow self-reflection feedback files (cross-task, cross-session channel)
+!.figma/
+!figma-skill/.figma/feedback/
+!figma-skill/.figma/feedback/*.md
+# Re-ignore tasks/cache under figma-skill (sensitive state files)
+figma-skill/.figma/tasks/
+figma-skill/.figma/cache/
