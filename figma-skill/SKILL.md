@@ -3,7 +3,7 @@ name: figma-skill
 model: sonnet
 category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 2.1
+version: 2.2
 ---
 
 # Figma End-to-End Execution v2
@@ -113,7 +113,7 @@ Workflow 12（自省归档 / feedback 落盘）   → references/self-reflection
 
 - 输入：上一阶段 Gate 状态、当前 `.figma/tasks/<task-id>/state.json`；
 - 输出：`state.currentWorkflow`、`state.gate`、`state.gateStatus`、`events.jsonl` 中至少一条对应类型事件；
-- Gate 名：固定的 `EnvironmentGate` / `DesignSystemGate` / `TaskClassificationGate` / `DiscoveryGate` / `NamingGate` / `WritePlanGate` / `BaselineGate` / `ExecutionGate` / `GeometryGate` / `CorrectionGate` / `DeliveryGate` / `SelfReflectionGate`；
+- Gate 名：固定的 `EnvironmentGate` / `DesignSystemGate` / `TaskClassificationGate` / `DiscoveryGate` / `NamingGate` / `WritePlanGate` / `BaselineGate` / `ExecutionGate` / `GeometryGate` / `ContainmentGate` / `CorrectionGate` / `DeliveryGate` / `SelfReflectionGate`；
 - 下一态：`state.status` 与 `state.currentWorkflow`。
 
 `GateStatus` 仅 `PENDING | PASS | FAIL | BLOCKED | NOT_REQUIRED`。任何阶段 FAIL 立刻停止并返回上一阶段。
@@ -122,7 +122,7 @@ Workflow 12（自省归档 / feedback 落盘）   → references/self-reflection
 
 `COMPLETED` 必须同时满足：
 
-1. 几何六道闸门全部 `PASS`；
+1. 几何七道闸门全部 `PASS`；
 2. 视觉截图实际打开且无未披露问题；
 3. `.figma/tasks/<task-id>/` 内 `state.json`、`index.json`、`events.jsonl`、`recovery.md`、`plan.md`、`todo.md` 全量校验 `figma-task-state.mjs validate` 通过；
 4. 视觉结论已写入 `state.validation.visual.summary`；
@@ -148,7 +148,7 @@ Workflow 12（自省归档 / feedback 落盘）   → references/self-reflection
 Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLETED / FAILED / CANCELLED / SUPERSEDED`。自省不重复 Figma 写入，只生成一份反思文件供后续会话与维护者使用。
 
 - 存储路径：`<Current workspace>/.figma/feedback/<timestamp>.md`，其中 `<timestamp>` 使用 ISO 8601 文件名安全形式（`YYYY-MM-DDTHH-MM-SS`，本地时区），文件名为单一时间戳，不含 task id。
-- 文件首行必须以 `# figma-skill v2.1 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 2.1 -->` 注释；以下为问题与优化方向两个表。
+- 文件首行必须以 `# figma-skill v2.2 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 2.2 -->` 注释；以下为问题与优化方向两个表。
 - 问题列表表头：`# | 问题 | 出现的 Workflow | 影响`。每行写一个具体观察（例如："Workflow 6 审批后立即 ack，没有要求 plan.md 重新打开"。）。
 - 优化方向表头：`# | 优化方向 | 优先级 | 关联问题`。每行写一条可执行改进（例如："将 plan 重读纳入 Workflow 8 起步动作"。优先级只允许 `P0 / P1 / P2`。
 - 两个表必须同时存在；缺少任何一张视为本 Workflow `Gate=FAIL` 并触发一次重新自省，禁止直接关闭会话。
@@ -167,6 +167,7 @@ Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLE
 - "Workflow 10 自动修了三次不成功就让它过" → 错；失败超过三必须停止写入并报告。
 - "之前那条 .figma 截图只是临时检查，可以保留" → 错；只有归档完成且零残留才允许声明完成。
 - "Workflow 11 收尾后直接关掉就行，不用写自省" → 错；任何归档结束的会话都必须落盘 `.figma/feedback/<timestamp>.md`，否则 `SelfReflectionGate=FAIL`。
+- "重名同 parent 节点必须 FAIL 或显式 `--reuse`，不得静默新建。" → 错；`figma-cli create.*` 默认 `--check-exists` 触发 DUPLICATE 检测时，agent 必须先 live-read 已有节点、确认意图，再决定 `--reuse` 或改名重试，禁止静默 reuse。
 
 ## Task Entry Pattern (Workflow 0B)
 

@@ -26,12 +26,12 @@ const refs = {
   designSystem: readRef("design-system.md"),
 };
 
-test("frontmatter description is trigger-only and version is 2.1", () => {
+test("frontmatter description is trigger-only and version is 2.2", () => {
   assert.match(SKILL, /^---[\s\S]+?---\n/, "SKILL.md must start with frontmatter");
   const fm = SKILL.match(/^---([\s\S]+?)---/)[1];
   assert.match(fm, /\bname:\s*figma-skill\b/);
   assert.match(fm, /\bdescription:\s*Use when\b/);
-  assert.match(fm, /\bversion:\s*2\.1\b/);
+  assert.match(fm, /\bversion:\s*2\.2\b/);
 });
 
 test("SKILL.md stays within the v2 size budget", () => {
@@ -65,7 +65,7 @@ test("SKILL.md Mandatory Lookups list references by phase", () => {
   }
 });
 
-test("references include the v2.1 routing files", () => {
+test("references include the v2.2 routing files", () => {
   for (const name of [
     "naming.md",
     "state-and-recovery.md",
