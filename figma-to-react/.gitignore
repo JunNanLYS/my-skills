@@ -5,3 +5,4 @@ preview/
 tmp/
 *.log
 .DS_Store
+.superpowers/
