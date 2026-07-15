@@ -172,6 +172,8 @@ Approval
 | 21 | `EvalRunFallback` | 不降级也要显式留位 | 不知是"有意不降级"还是"忘了写" | `# 此任务全程 figma-cli 原生命令可达，本段留空。` |
 | 22 | `Approval.designSystem` | 必填，给状态 + 时间戳 + 实体 | Gate 1 状态不可审计 | `PASS at 2026-07-15T10:00:00+08:00 (Gate 1)` |
 | 23 | `Approval.figmaWrite` | 必填，给状态 | Gate 2 状态不可审计 | `PENDING — 提交本 plan 等用户批准` |
+| 24 | `plan.clipWhitelist` | 条件必填：含 `clipsContent=true` 容器时必填；否则可省 | Containment Gate 7 FAIL | `[{ nodeId: "1741:439", rationale: "Library preview card — internal scroll is intentional" }]` |
+| 25 | `plan.writeOrder` | 否；存在 `figma-cli create.*` 调用时建议 | agent 无法按顺序复用 WriteOrder 节点 | 见下"WriteOrder"说明 |
 
 判定规则：
 
@@ -179,6 +181,32 @@ Approval
 - 任一字段缺漏或与上表"修复示例"形式偏差超过 1 处 ⇒ **直接打回**，禁止"差不多就行"；
 - `EvalRunFallback` 即便不留字段也**必须**有 `# 此任务全程 figma-cli 原生命令可达，本段留空` 一行；
 - `Todo`（`workflow: 7` 等）属于 Workflow 4I/6 独立交付，不在本节强制约束之内，但**第 19/20 行若缺席则 Todo 也无法正确编排**，必须先修 19/20。
+
+### ClipWhitelist
+
+当 plan 涉及任何 `clipsContent=true` 容器时，`plan.md` **必须**包含 `## ClipWhitelist` 段。Schema 由 `assertValidPlan`（`scripts/lib/task-state/validate.mjs`）校验：每项 `{ nodeId, rationale }` 中 `rationale.length >= 5`。缺省视作空数组 → Containment Gate 7 命中所有 `clipsContent=true` + 超界子为 FAIL。
+
+```markdown
+## ClipWhitelist
+
+| nodeId | rationale |
+| ------ | --------- |
+| 1741:439 | Library preview card — internal scroll is intentional |
+```
+
+### WriteOrder
+
+`## WriteOrder` 是人类阅读段，**无 schema 字段**。列出 agent 打算发的 `figma-cli create.*` 调用顺序，便于 `--check-exists` 命中时复用已声明节点：
+
+```markdown
+## WriteOrder
+
+1. figma-cli create section --name "News Section" --parent <pageId> --check-exists
+2. figma-cli create frame --name "News Hero" --parent <newsSectionId> --check-exists
+3. figma-cli create component --name "NewsCard" --parent <libraryPageId> --check-exists --reuse
+```
+
+调用顺序与 `--check-exists` 探测顺序共同决定 reuse 路径。
 
 ## Examples
 
