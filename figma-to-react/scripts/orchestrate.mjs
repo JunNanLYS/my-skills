@@ -64,12 +64,20 @@ export async function main(argv = process.argv.slice(2), { runner = defaultRunne
   const flags = parseArgs(argv);
   const workdir = flags.workdir || process.cwd();
 
+  // Normalize runner: resolve-input.mjs expects runner.run(args), extract.mjs
+  // expects runner(args). Both share the same underlying defaultRunner, so adapt
+  // both call sites so each module gets the shape it needs.
+  const runnerFn = typeof runner === 'function' ? runner : runner.run.bind(runner);
+  const runnerObj = typeof runner === 'function'
+    ? { run: runner }
+    : runner;
+
   console.log('→ Resolving input...');
-  const { mode, nodeIds } = await resolveInput(flags, { runner });
+  const { mode, nodeIds } = await resolveInput(flags, { runner: runnerObj });
   console.log(`  mode=${mode}, nodeIds=${nodeIds.join(', ')}`);
 
   console.log('→ Extracting from Figma...');
-  const { jsxFiles, tokensFile } = await extract({ nodeIds, mode, workdir, runner });
+  const { jsxFiles, tokensFile } = await extract({ nodeIds, mode, workdir, runner: runnerFn });
   const tokens = parseTokensCss(await readFile(tokensFile, 'utf8'));
 
   console.log('→ Transforming + rendering components...');
