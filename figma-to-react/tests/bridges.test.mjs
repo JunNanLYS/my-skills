@@ -33,3 +33,32 @@ test('collectBridges returns the component name', async () => {
   const bridges = collectBridges(ir);
   assert.equal(bridges.component, 'Button');
 });
+
+test('collectBridges records effect-lossy for nodes with effects or blendMode', async () => {
+  // Option C: construct an IR manually so we test bridges.mjs in isolation
+  // without depending on transform.mjs passing effects/blendMode through.
+  const ir = {
+    name: 'TestEffect',
+    root: {
+      type: 'frame',
+      name: 'Card',
+      width: 200,
+      height: 100,
+      style: {
+        effects: [
+          { type: 'DROP_SHADOW', color: '#000000', offset: { x: 0, y: 2 }, radius: 4 },
+        ],
+        blendMode: 'MULTIPLY',
+      },
+    },
+  };
+  const bridges = collectBridges(ir);
+  const effectLossy = bridges.bridges.filter(b => b.kind === 'effect-lossy');
+  assert.ok(effectLossy.length >= 2, `expected >=2 effect-lossy bridges, got ${effectLossy.length}`);
+  const shadowBridge = effectLossy.find(b => /DROP_SHADOW/.test(b.reason));
+  assert.ok(shadowBridge, 'expected bridge mentioning DROP_SHADOW');
+  assert.match(shadowBridge.reason, /DROP_SHADOW/);
+  const blendBridge = effectLossy.find(b => /MULTIPLY/.test(b.reason));
+  assert.ok(blendBridge, 'expected bridge mentioning MULTIPLY');
+  assert.match(blendBridge.reason, /MULTIPLY/);
+});

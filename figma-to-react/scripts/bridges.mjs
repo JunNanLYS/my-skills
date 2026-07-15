@@ -27,5 +27,24 @@ function walk(node, ir, bridges) {
       reason: 'text has no lineHeight; visual line wrapping may differ from Figma',
     });
   }
+  // Detect unsupported effects and blend modes (lossy).
+  if (node.style) {
+    if (Array.isArray(node.style.effects) && node.style.effects.length > 0) {
+      for (const effect of node.style.effects) {
+        bridges.push({
+          nodeId: node.name || '(unnamed)',
+          kind: 'effect-lossy',
+          reason: `effect ${effect.type} is not auto-rendered; pixel-level ${effect.type.toLowerCase().replace('_', ' ')} omitted`,
+        });
+      }
+    }
+    if (node.style.blendMode) {
+      bridges.push({
+        nodeId: node.name || '(unnamed)',
+        kind: 'effect-lossy',
+        reason: `blendMode ${node.style.blendMode} is not supported in CSS; element rendered normally`,
+      });
+    }
+  }
   for (const c of node.children || []) walk(c, ir, bridges);
 }
