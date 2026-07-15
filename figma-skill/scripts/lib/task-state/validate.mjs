@@ -405,6 +405,36 @@ function assertValidation(value) {
   assertNullableString(visual.summary, "taskState.validation.visual.summary");
 }
 
+export function assertValidPlan(value) {
+  function invalid(message, details = {}) {
+    throw new TaskStateError("PLAN_INVALID", message, details);
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    invalid("plan must be an object", { path: "plan" });
+  }
+  const clipWhitelist = Object.hasOwn(value, "clipWhitelist") ? value.clipWhitelist : [];
+  if (!Array.isArray(clipWhitelist)) {
+    invalid("plan.clipWhitelist must be an array", { path: "plan.clipWhitelist" });
+  }
+  clipWhitelist.forEach((entry, index) => {
+    const p = `plan.clipWhitelist[${index}]`;
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      invalid(`${p} must be an object`, { path: p });
+    }
+    if (typeof entry.nodeId !== "string" || entry.nodeId.length < 1) {
+      invalid(`${p}.nodeId must be a non-empty string`, { path: `${p}.nodeId` });
+    }
+    if (typeof entry.rationale !== "string" || entry.rationale.length < 5) {
+      invalid(`${p}.rationale must be a string of at least 5 characters`, { path: `${p}.rationale` });
+    }
+  });
+  const writeOrder = Object.hasOwn(value, "writeOrder") ? value.writeOrder : [];
+  if (!Array.isArray(writeOrder)) {
+    invalid("plan.writeOrder must be an array", { path: "plan.writeOrder" });
+  }
+  return value;
+}
+
 function assertEventDetails(value) {
   assertPlainObject(value, "event.details");
   assertKnownKeys(value, EVENT_DETAIL_KEYS, "event.details");
