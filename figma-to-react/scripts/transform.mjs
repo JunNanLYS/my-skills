@@ -98,6 +98,9 @@ function mapNode(astNode) {
     if (k in props) node.style = { ...node.style, [k]: props[k] };
   }
 
+  // Ensure node.style is initialized for text nodes that may only have font props
+  node.style = node.style || {};
+
   // Text-specific — return early without recursing into children.
   // The parser wraps text content in a {type:'Text', value} child; recursing
   // would double-emit the text node as a phantom child in the IR's children array.
@@ -108,6 +111,7 @@ function mapNode(astNode) {
     if (props.lineHeight !== undefined) node.style.lineHeight = props.lineHeight;
     if (props.letterSpacing !== undefined) node.style.letterSpacing = props.letterSpacing;
     if (props.fill !== undefined) node.style.color = props.fill;
+    if (props.fontFamily !== undefined) node.style.fontFamily = props.fontFamily;
     const textContent = (astNode.children || [])
       .filter(c => c.type === 'Text')
       .map(c => c.value)
