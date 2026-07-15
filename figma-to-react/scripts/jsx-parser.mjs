@@ -72,7 +72,6 @@ function tokenize(source) {
   // Returns an ordered list of tokens: open tags, close tags, and text.
   const tokens = [];
   let cursor = 0;
-  let depth = 0;
 
   while (cursor < source.length) {
     // Find the next tag at or after cursor.
