@@ -24,7 +24,6 @@ test('buildPreview writes preview/index.html with one section per component', as
   const html = readFileSync(join(work, 'preview', 'index.html'), 'utf8');
   assert.match(html, /data-component="Button"/);
   assert.match(html, /data-component="Card"/);
-  assert.match(html, /importmap/);
 });
 
 test('buildPreview writes preview/preview.js that imports each compiled component', async () => {
@@ -42,4 +41,12 @@ test('buildPreview writes dist-esm/<Name>/<Name>.js after esbuild compile', asyn
   setupFakeDist(work, ['Button']);
   await buildPreview({ workdir: work });
   assert.ok(existsSync(join(work, 'dist-esm', 'Button', 'Button.js')));
+});
+
+test('renderPreviewHtml does not emit an importmap block', async () => {
+  const work = mkdtempSync(join(tmpdir(), 'ftr-'));
+  setupFakeDist(work, ['Button']);
+  await buildPreview({ workdir: work });
+  const html = readFileSync(join(work, 'preview', 'index.html'), 'utf8');
+  assert.ok(!html.includes('importmap'), 'preview HTML must not contain importmap');
 });
