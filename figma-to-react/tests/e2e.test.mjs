@@ -42,4 +42,16 @@ test('end-to-end: a single node → dist/<Name>/ + preview/ + dist-esm/', async 
 
   const html = readFileSync(join(work, 'preview', 'index.html'), 'utf8');
   assert.match(html, /data-component="Button"/);
+  assert.ok(!html.includes('importmap'), 'preview HTML must not contain importmap');
+  const previewJs = readFileSync(join(work, 'preview', 'preview.js'), 'utf8');
+  assert.ok(!/from\s+['"]react['"]/.test(previewJs), 'preview.js must not depend on importmap');
+  assert.match(previewJs, /await import\(/);
+  // Proxies generated under dist-esm/.
+  assert.ok(existsSync(join(work, 'dist-esm', 'react-esm.mjs')));
+  assert.ok(existsSync(join(work, 'dist-esm', 'react-dom-client-esm.mjs')));
+  const reactEsm = readFileSync(join(work, 'dist-esm', 'react-esm.mjs'), 'utf8');
+  assert.match(reactEsm, /https:\/\/esm\.sh\/react@18/);
+  // Component JS has its react import rewritten.
+  const componentJs = readFileSync(join(work, 'dist-esm', 'Button', 'Button.js'), 'utf8');
+  assert.match(componentJs, /from\s+['"]\.\.\/react-esm\.mjs['"]/);
 });
