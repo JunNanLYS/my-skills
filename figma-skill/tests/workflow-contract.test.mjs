@@ -26,12 +26,12 @@ const refs = {
   designSystem: readRef("design-system.md"),
 };
 
-test("frontmatter description is trigger-only and version is 2.0", () => {
+test("frontmatter description is trigger-only and version is 2.1", () => {
   assert.match(SKILL, /^---[\s\S]+?---\n/, "SKILL.md must start with frontmatter");
   const fm = SKILL.match(/^---([\s\S]+?)---/)[1];
   assert.match(fm, /\bname:\s*figma-skill\b/);
   assert.match(fm, /\bdescription:\s*Use when\b/);
-  assert.match(fm, /\bversion:\s*2\.0\b/);
+  assert.match(fm, /\bversion:\s*2\.1\b/);
 });
 
 test("SKILL.md stays within the v2 size budget", () => {
@@ -59,12 +59,13 @@ test("SKILL.md Mandatory Lookups list references by phase", () => {
     "references/geometry-verifier.md",
     "references/validation.md",
     "references/naming.md",
+    "references/self-reflection.md",
   ]) {
     assert.ok(mandatory.includes(path), `mandatory lookup missing: ${path}`);
   }
 });
 
-test("references include the v2.0 routing files", () => {
+test("references include the v2.1 routing files", () => {
   for (const name of [
     "naming.md",
     "state-and-recovery.md",
@@ -74,6 +75,7 @@ test("references include the v2.0 routing files", () => {
     "validation.md",
     "installation.md",
     "design-system.md",
+    "self-reflection.md",
   ]) {
     assert.ok(existsSync(join(skill, "references", name)), `${name} missing`);
   }

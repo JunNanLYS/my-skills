@@ -15,6 +15,7 @@ const required = [
   "references/validation.md",
   "references/geometry-verifier.md",
   "references/naming.md",
+  "references/self-reflection.md",
   "scripts/install-figma-cli.ps1",
   "scripts/figma-validate-bounds.mjs",
   "scripts/list-children.mjs",
@@ -40,7 +41,7 @@ assert.ok(skill.startsWith("---\n"), "frontmatter must be first");
 for (const field of ["name: figma-skill", "model:", "category:", "description:"]) {
   assert.match(skill, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
-assert.match(skill, /^version: 2\.0$/m);
+assert.match(skill, /^version: 2\.1$/m);
 
 for (const phrase of [
   "figma-cli",

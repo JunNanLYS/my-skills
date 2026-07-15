@@ -3,7 +3,7 @@ name: figma-skill
 model: sonnet
 category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 2.0
+version: 2.1
 ---
 
 # Figma End-to-End Execution v2
@@ -43,6 +43,7 @@ Workflow 0A / 4A–4F / 4H / 5 / 6 / 9–11（发现 / 命名 / 计划 / 验证 
 Workflow 6 / 7 / 8（写入与执行）         → references/execution.md
 Workflow 9 / 10（几何验证 / 修正）       → references/geometry-verifier.md
 Workflow 11（终态交付 / 压缩归档）       → references/validation.md
+Workflow 12（自省归档 / feedback 落盘）   → references/self-reflection.md
 任何阶段（命名 / 变体 / 命名解析）       → references/naming.md
 任何阶段（`.figma/` 任务账本 / 状态 / 租约 / 恢复 / 归档）
                                        → references/state-and-recovery.md
@@ -80,6 +81,7 @@ Workflow 11（终态交付 / 压缩归档）       → references/validation.md
   → Workflow 9   几何验证 (geometry-verifier.md)
   → Workflow 10  最多三轮修正 (validation.md)
   → Workflow 11  交付 + 压缩归档 (validation.md + state-and-recovery.md)
+  → Workflow 12  自省归档 (self-reflection.md)
 ```
 
 完整 Mermaid 状态图与合法迁移见 `references/state-and-recovery.md`。`Audit` / `Export` 类型不进入 Workflow 6 / 8 / 10；`readOnly` 任务即使到达 Workflow 5 也只走 `state.taskType` 的 `readOnly` 子集。
@@ -111,7 +113,7 @@ Workflow 11（终态交付 / 压缩归档）       → references/validation.md
 
 - 输入：上一阶段 Gate 状态、当前 `.figma/tasks/<task-id>/state.json`；
 - 输出：`state.currentWorkflow`、`state.gate`、`state.gateStatus`、`events.jsonl` 中至少一条对应类型事件；
-- Gate 名：固定的 `EnvironmentGate` / `DesignSystemGate` / `TaskClassificationGate` / `DiscoveryGate` / `NamingGate` / `WritePlanGate` / `BaselineGate` / `ExecutionGate` / `GeometryGate` / `CorrectionGate` / `DeliveryGate`；
+- Gate 名：固定的 `EnvironmentGate` / `DesignSystemGate` / `TaskClassificationGate` / `DiscoveryGate` / `NamingGate` / `WritePlanGate` / `BaselineGate` / `ExecutionGate` / `GeometryGate` / `CorrectionGate` / `DeliveryGate` / `SelfReflectionGate`；
 - 下一态：`state.status` 与 `state.currentWorkflow`。
 
 `GateStatus` 仅 `PENDING | PASS | FAIL | BLOCKED | NOT_REQUIRED`。任何阶段 FAIL 立刻停止并返回上一阶段。
@@ -141,6 +143,19 @@ Workflow 11（终态交付 / 压缩归档）       → references/validation.md
 
 任意步骤失败 → `archiveStatus=ARCHIVE_FAILED` + `close` 拒绝。`COMPLETED / FAILED / CANCELLED / SUPERSEDED` 都走压缩归档；`BLOCKED / STALE / NEEDS_REPLAN` 因可恢复仍保留截图。
 
+## Self-Reflection (Workflow 12)
+
+Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLETED / FAILED / CANCELLED / SUPERSEDED`。自省不重复 Figma 写入，只生成一份反思文件供后续会话与维护者使用。
+
+- 存储路径：`<Current workspace>/.figma/feedback/<timestamp>.md`，其中 `<timestamp>` 使用 ISO 8601 文件名安全形式（`YYYY-MM-DDTHH-MM-SS`，本地时区），文件名为单一时间戳，不含 task id。
+- 文件首行必须以 `# figma-skill v2.1 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 2.1 -->` 注释；以下为问题与优化方向两个表。
+- 问题列表表头：`# | 问题 | 出现的 Workflow | 影响`。每行写一个具体观察。
+- 优化方向表头：`# | 优化方向 | 优先级 | 关联问题`。每行写一条可执行改进，优先级只允许 `P0 / P1 / P2`。
+- 两个表必须同时存在；缺少任何一张视为本 Workflow `Gate=FAIL` 并触发一次重新自省，禁止直接关闭会话。
+- `SelfReflectionGate` 默认 `PASS` 即写文件；只有文件落盘、`size > 0`、包含两个表头子串、且首行版本字串匹配当前 `version` 才允许声明 PASS。
+- 自省文件不需要 `.figma/tasks/<task-id>/` 任何现有写入；`.figma/feedback/` 是跨任务、跨会话的全局目录，由 `figma-task-state.mjs reflect` 创建或追加。
+- 自省文件不得包含 daemon token、`~/.figma-ds-cli/` 路径或凭据；触发 S23 的内容必须脱敏或拒绝落盘。
+
 ## Red Flags and Rationalizations
 
 每个失败模式对应一条直接拒绝的判断。所有 Red Flag 同样适用于审计与导出任务。
@@ -151,6 +166,7 @@ Workflow 11（终态交付 / 压缩归档）       → references/validation.md
 - "存在 node 即可写，不用重新读 geometry" → 错；duplicate / reparent / unwrap 后必须重新读 geometry。
 - "Workflow 10 自动修了三次不成功就让它过" → 错；失败超过三必须停止写入并报告。
 - "之前那条 .figma 截图只是临时检查，可以保留" → 错；只有归档完成且零残留才允许声明完成。
+- "Workflow 11 收尾后直接关掉就行，不用写自省" → 错；任何归档结束的会话都必须落盘 `.figma/feedback/<timestamp>.md`，否则 `SelfReflectionGate=FAIL`。
 
 ## Task Entry Pattern (Workflow 0B)
 
@@ -160,6 +176,6 @@ Workflow 11（终态交付 / 压缩归档）       → references/validation.md
 2. `figma-task-state.mjs create --task <id> --title ... --type <type> --write-required <bool>`；
 3. Workflow 6 审批通过后 `figma-task-state.mjs acquire`；
 4. 进入 Workflow 7 记录 baseline；
-5. 后续 Workflow 9 / 10 / 11 都通过 `checkpoint` 写入事务。
+5. 后续 Workflow 9 / 10 / 11 / 12 都通过 `checkpoint` 写入事务。
 
 概念问题不创建任务账本。
