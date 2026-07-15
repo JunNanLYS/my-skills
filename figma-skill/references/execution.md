@@ -97,6 +97,50 @@ figma-cli status
 
 通用定义必须放在组件或 Library page，UI page 消费实例或批准的 duplicate。禁止凭记忆重画已有组件。
 
+## Write order & `--check-exists` (v2.2+)
+
+`figma-cli create.*` 子命令（产生单一具名节点的：`create section` / `create frame` / `create component` / `create instance` / `create rectangle` / `create ellipse` / `create text`）接受四个 flag：
+
+| Flag | Default | Effect |
+| - | - | - |
+| `--check-exists` | off | 创建前探测 `(name, parent)` |
+| `--reuse` | off | 允许复用已有节点（必须配合 `--check-exists`） |
+| `--strict` | off | 命中重复即硬 abort（`--reuse` 不能救援） |
+| `--rename <new-name>` | off | 命中重复时改名重试（必须配合 `--check-exists`） |
+
+### 行为矩阵
+
+```
+figma-cli create section --name "X" --parent P --check-exists
+  ├─ 不存在 → 正常创建，返回新 nodeId
+  ├─ 存在, 无 --reuse → 返回 { status: "DUPLICATE", code: "DUPLICATE_NODE",
+  │                            existingId, existingName, parent,
+  │                            message: "..." }, exit 3
+  ├─ 存在, --reuse → 跳过创建，返回 existingId + { reused: true }, exit 0
+  └─ 存在, --strict → abort（不允许 --reuse 救援），exit 4
+```
+
+### Agent 工作流集成
+
+1. 在 `plan.md##WriteOrder` 段声明预期 `create.*` 调用顺序。
+2. 任何可能与 daemon 重试冲突的 `create.*` 都加 `--check-exists`。
+3. 默认禁止静默 reuse：只有 agent live-read 已有节点、确认结构匹配意图后才传 `--reuse`。
+4. 绝不在没有 live-read 的情况下传 `--reuse`。
+
+### 失败恢复
+
+当 `--check-exists` 返回 `DUPLICATE`（exit 3）：
+
+- 若 `WriteOrder` 已声明此节点：`figma-cli get <id>` 读它，验证结构，re-issue with `--reuse`。
+- 若 `WriteOrder` 未声明此节点：真重复 → STOP，向用户报告，不自动解决。
+- 若传了 `--rename`：自动改名重试。
+
+### Red Flag
+
+> "重名同 parent 节点必须 FAIL 或显式 `--reuse`，不得静默新建。"
+
+由默认行为强制；唯一 bypass 路径是 live-read 后的显式 `--reuse`。
+
 ## Failure and Recovery
 
 部分成功或严重偏差必须停止后续批次。只有当前帮助和批次历史确认 `undo` 精确撤销最近目标 `render`/`render-batch` 时才允许使用，否则保留现场并报告。禁止连续破坏性恢复。
