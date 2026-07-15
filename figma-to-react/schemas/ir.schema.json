@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ai-skills.local/figma-to-react/ir.schema.json",
+  "type": "object",
+  "required": ["name", "root"],
+  "additionalProperties": false,
+  "properties": {
+    "name": { "type": "string", "minLength": 1 },
+    "nodeId": { "type": "string" },
+    "width": { "type": "number", "minimum": 0 },
+    "height": { "type": "number", "minimum": 0 },
+    "tokens": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "root": { "$ref": "#/$defs/node" },
+    "bridges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/bridge" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "required": ["type"],
+      "additionalProperties": true,
+      "properties": {
+        "type": {
+          "enum": ["frame", "rectangle", "ellipse", "text", "image", "vector", "group"]
+        },
+        "name": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 },
+        "layoutMode": {
+          "enum": ["horizontal", "vertical", "none", "HORIZONTAL", "VERTICAL", "NONE"]
+        },
+        "primaryAxisAlignItems": { "type": "string" },
+        "counterAxisAlignItems": { "type": "string" },
+        "padding": { "$ref": "#/$defs/padding" },
+        "gap": { "type": "number", "minimum": 0 },
+        "style": { "type": "object" },
+        "text": { "type": "string" },
+        "src": { "type": "string" },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/node" }
+        }
+      }
+    },
+    "padding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "top": { "type": "number" },
+        "right": { "type": "number" },
+        "bottom": { "type": "number" },
+        "left": { "type": "number" }
+      }
+    },
+    "bridge": {
+      "type": "object",
+      "required": ["nodeId", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "nodeId": { "type": "string" },
+        "kind": {
+          "enum": ["flattened", "needs-rewrite", "font-missing", "effect-lossy"]
+        },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}
