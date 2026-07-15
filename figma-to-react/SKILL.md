@@ -3,7 +3,7 @@ name: figma-to-react
 model: sonnet
 category: design
 description: Use when converting Figma components into directly-usable React components with a unified preview page, driven by figma-cli. Triggers on "figma to react", "export figma as react", "figma component to jsx".
-version: 1.0
+version: 2.0
 ---
 
 # figma-to-react
@@ -39,6 +39,7 @@ Workflow 3/4 (transform + render)    → references/react-render.md
 Workflow 5 (preview)                 → references/preview.md
 批量模式                             → references/batch.md
 任何阶段 (1:1 不可达项 / 降级)      → references/limitations.md
+figma-cli 找不到 / PATH 问题         → references/troubleshooting.md    (v2 新增)
 ```
 
 禁止：用 SKILL.md 替代以上任何一次加载。
