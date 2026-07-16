@@ -48,3 +48,18 @@ Behavior notes:
 - It only runs for pushes initiated through Claude Code's `Bash` tool in this repository.
 - Pushes performed outside Claude Code do not trigger the hook.
 - The hook is best-effort and non-blocking; sync failures do not cancel the completed push.
+
+---
+
+## Rust 端口状态(Phase 0)
+
+本仓库外的 `D:\temp\figma-cli-rust\` 是一个**独立 fork**,不在本仓库 git 跟踪范围。它 Rust 重写 figma-ds-cli,Phase 0 仅完成骨架 + CDP eval 路径。
+
+**未实现 / 不工作**:
+
+- **Plugin 模式未实现** — Rust daemon 的 `WS /plugin` 端点只接受连接 + 响应 `pong`;**Figma 沙箱侧的 `plugin/code.js` 和 `plugin/ui.html` 没移植**。这意味着 `DAEMON_MODE=plugin` 路径完全不可用;只支持 CDP/Yolo 模式。如果 figma-skill 的任何 workflow 需要 Plugin 模式,必须使用 `~/.claude/skills/figma-skill` 或 `~/.codex/skills/figma-skill`(Node 版本),**不要**让 rustcli 走 plugin 路径。
+- **49 个 `daemonExec('eval', ...)` 业务命令全部 stub** — `set fill`、`create frame`、`move`、`clone`、`align`、`bind variable` 等在 Rust 版都返回 "not yet implemented in rustcli (Phase 0)" 并 exit 1。Rust CLI 唯一能跑通的 eval 是 `figma-cli eval "return 42"` 这种直接表达式。
+- **`run <file>` 未实现** — figma-skill 在 sandbox 里跑的脚本通道,Node 版有,Rust 版没有。
+- **JSX 解析器未移植** — 1500 行 `parseJSX` / `parseJSXBatch`,`render` / `render-batch` 命令依赖。
+
+**对 AI 的硬约束**:在涉及 figma-skill / figma-to-react / figma-cli 的任务里,**默认使用 Node 版本**(`figma-cli` 命令 on PATH,源是 `~/.claude/skills/figma-skill` 或 npm 安装的 `figma-ds-cli`)。**不要建议、推荐、调用或集成 `D:\temp\figma-cli-rust\`** 下的 rustcli 二进制,除非用户明确说"用 Rust 版"。
