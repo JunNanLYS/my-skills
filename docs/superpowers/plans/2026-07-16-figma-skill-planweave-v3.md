@@ -150,7 +150,7 @@ test("SKILL.md states the three v3 authority boundaries", () => {
   assert.match(authority, /\.figma\/);
   assert.match(authority, /screenshot\/<planweave-ref>/);
   assert.match(authority, /feedback\/<timestamp>\.md/);
-  assert.doesNotMatch(authority, /task ledger|state machine|lease|checkpoint|archiveStatus/);
+  assert.doesNotMatch(authority, /task ledger|state machine|active workflow state|active ledger|archiveStatus\s*=/);
 });
 
 test("SKILL.md mandates Pre-Spec Context Gate before spec or plan", () => {
@@ -272,7 +272,7 @@ version: 3.0
 - SKILL.md 是 v3 compact router：只负责强制门禁、必读 reference、PlanWeave 生命周期、review contract、Figma artifact 边界和 Red Flags。
 - PlanWeave is the workflow authority：requirements discovery、spec approval、implementation plan approval、task/block dependencies、runner/reviewer prompts、`pass` / `needs_changes`、rework routing、completion 和 recovery 必须由 PlanWeave 承载。
 - `figma-cli` is the Figma fact and mutation authority：环境检查、live reads、writes、exports、screenshots、geometry evidence 和 validation data 必须来自 `figma-cli`。
-- `.figma/` 只保留 artifact duty：`.figma/screenshot/<planweave-ref>/` 保存视觉验收截图；`.figma/feedback/<timestamp>.md` 保存 self-reflection。它禁止承载 task plan、state、events、lease、checkpoint、recovery 或 completion authority。
+- `.figma/` 只保留 artifact duty：`.figma/screenshot/<planweave-ref>/` 保存视觉验收截图；`.figma/feedback/<timestamp>.md` 保存 self-reflection。`.figma/` 禁止承载 task plan、state、events、recovery 或 completion authority（历史 ledger 命名例如 `.figma/tasks`、`lease.json`、`events.jsonl`、`archiveStatus` 不再是 active state）。
 - `scripts/{list-children,overlap-check,page-overlap-check,inspect-geometry,figma-validate-bounds}.mjs` 是只读 helper；`scripts/{apply-layout,resize-section}.mjs` 是写入 helper。所有 helper 只能通过批准的 `figma-cli run` 路径进入 Figma 任务。
 
 ## Non-Negotiable Rules
@@ -280,7 +280,7 @@ version: 3.0
 - 所有 Figma 读取、创建、修改、导出和验证必须使用 `figma-cli`。禁止使用 Figma MCP、其他 Figma CLI、GUI 自动化、直接 REST API 或记忆作为替代路径。
 - Pre-Spec Context Gate 必须在 spec drafting 之前完成；未完成时 no spec, no plan, no Figma write。
 - Pre-Spec Context Gate 必须确认用户目标、非目标、任务类型 (`Create | Modify | Audit | Migrate | Export`)、是否需要 Figma 写入，以及阻塞性未知项。
-- Pre-Spec Context Gate 必须先读取 `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`。文档缺失或缺少当前任务规则时，必须先提出最小设计系统补充、说明依据/影响/范围外冲突、等待用户明确批准并更新文档；设计系统审批禁止授权 Figma 写入。
+- Pre-Spec Context Gate 必须先读取 `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`，before spec drafting。文档缺失或缺少当前任务规则时，必须先提出最小设计系统补充、说明依据/影响/范围外冲突、等待用户明确批准并更新文档；设计系统审批禁止授权 Figma 写入。
 - 每个新会话首次执行需要 live Figma 的任务前必须按顺序运行 `figma-cli --version`、`figma-cli --help`、`figma-cli status`；只有未连接时才允许 `figma-cli connect`，随后必须再运行 `figma-cli status`。
 - spec drafting 前必须通过 `figma-cli` live-read 当前文件/page/section/frame、直接 children、关键 geometry、相关 components、variables、styles、dependencies；视觉基线需要时截图写入 `.figma/screenshot/<planweave-ref>/`。
 - Spec Gate 只描述完成时必须为真的状态：requirements、design-system basis、live facts、target state、affected nodes、naming、geometry/visual acceptance、out-of-scope、approved assumptions。禁止在 spec 中写 command sequence、write batch order、eval/run code、correction-loop details 或 runner/reviewer assignments。
@@ -369,9 +369,10 @@ Routing rules:
 
 ## Review Gate Contract
 
-Every Figma PlanWeave review gate must return one of:
+Every Figma PlanWeave review gate must return exactly one of these YAML forms. The accepted literal values for `result` are `pass` or `needs_changes`:
 
 ```yaml
+# result: pass | needs_changes
 result: pass
 checked:
   - spec_coverage
@@ -422,7 +423,7 @@ A plan missing any required final block fails Plan Review.
 ## Red Flags and Rationalizations
 
 - "先写 plan，执行时再读 FIGMA_DESIGN_SYSTEM.md" → 错；设计系统读取属于 Pre-Spec Context Gate，必须在 spec drafting 之前完成。
-- "旧 `.figma/tasks` ledger 里有 plan，可以直接继续" → 错；old `.figma/tasks` ledger is not workflow authority。必须通过 PlanWeave state/recovery，并 live-read Figma facts。
+- "旧 .figma/tasks ledger 里有 plan，可以直接继续" → 错；old .figma/tasks ledger is not workflow authority。必须通过 PlanWeave state/recovery，并 live-read Figma facts。
 - "PlanWeave 已记录 NodeId，所以不用重新读" → 错；PlanWeave 记录是 orchestration evidence，不替代 live Figma read。
 - "Audit 只是小修一下" → 错；`Audit` / `Export` 的 read-only 约束禁止任何 Figma mutation。
 - "Spec Review 有小问题但我知道怎么改，先继续" → 错；`needs_changes` 必须返回 targetBlock 并重做对应 block。
