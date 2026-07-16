@@ -282,7 +282,7 @@ version: 3.0
 - Pre-Spec Context Gate 必须确认用户目标、非目标、任务类型 (`Create | Modify | Audit | Migrate | Export`)、是否需要 Figma 写入，以及阻塞性未知项。
 - Pre-Spec Context Gate 必须先读取 `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`，before spec drafting。文档缺失或缺少当前任务规则时，必须先提出最小设计系统补充、说明依据/影响/范围外冲突、等待用户明确批准并更新文档；设计系统审批禁止授权 Figma 写入。
 - 每个新会话首次执行需要 live Figma 的任务前必须按顺序运行 `figma-cli --version`、`figma-cli --help`、`figma-cli status`；只有未连接时才允许 `figma-cli connect`，随后必须再运行 `figma-cli status`。
-- spec drafting 前必须通过 `figma-cli` live-read 当前文件/page/section/frame、直接 children、关键 geometry、相关 components、variables、styles、dependencies；视觉基线需要时截图写入 `.figma/screenshot/<planweave-ref>/`。
+- spec drafting 前必须通过 `figma-cli` 收集 live Figma context（当前文件/page/section/frame、直接 children、关键 geometry、相关 components、variables、styles、dependencies），before spec drafting；视觉基线需要时截图写入 `.figma/screenshot/<planweave-ref>/`。
 - Spec Gate 只描述完成时必须为真的状态：requirements、design-system basis、live facts、target state、affected nodes、naming、geometry/visual acceptance、out-of-scope、approved assumptions。禁止在 spec 中写 command sequence、write batch order、eval/run code、correction-loop details 或 runner/reviewer assignments。
 - Plan Gate 必须生成 PlanWeave implementation canvas，包含 Plan Draft、Plan Review、Pre-write Live Revalidation、Figma Write Blocks、Geometry Validation、Correction、Visual Validation、Final Review、Delivery、Self-Reflection，并为每个失败路径写明 rework route。
 - 只有 approved spec、approved plan、Pre-write Live Revalidation 三者均通过后，才允许任何 Figma 写入。
