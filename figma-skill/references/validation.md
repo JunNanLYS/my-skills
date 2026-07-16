@@ -1,48 +1,73 @@
-# Validation and Delivery (Workflow 9 / 10 / 11)
+# Validation, Final Review, and Delivery
 
-## Three Required Layers
+Validation evidence feeds PlanWeave review gates. It never bypasses them.
 
-### Structural
+## Structural Validation
 
-必须重新读取关键节点并核对层级、type、NodeId、尺寸、位置、Auto Layout、约束、instances 和变量绑定。复刻 Component 或 Component Set 时必须运行适用的 `spec --check`。Structural FAIL 必须进入 Workflow 10。
+Re-read in-scope nodes and verify:
 
-### Visual
+- hierarchy, type, NodeId, and parent relation;
+- position and size;
+- Auto Layout, constraints, and sizing behavior;
+- instances, variables, and style bindings;
+- component or Component Set checks where applicable.
 
-截图保存路径：`<project>/.figma/screenshot/<task-id>/`。文件命名使用页面或功能语义。**必须实际打开每张最终截图**，检查文字裁切、遮挡、对齐、间距、颜色、状态、圆角和层级。退出码 0 和导出成功禁止代替看图。
+Structural failure routes to Correction Block.
 
-视觉结论必须写入 `state.validation.visual.summary`；归档时该结论会复制到 `final-summary.md` 中。
+## Geometry Validation
 
-### Design System
+Run the geometry pipeline from `references/geometry-verifier.md` in order. Each failure routes to Correction Block and then reruns the affected gate.
 
-必须逐项检查当前任务的 tokens、字体、间距、栅格、图标、组件状态和响应式行为是否符合 `docs/FIGMA_DESIGN_SYSTEM.md`。范围外历史差异只报告，禁止修改。
+## Visual Validation
 
-## Geometry Validation Checklist
+Screenshots are saved under:
 
-- 每个 in-scope 节点的 `layoutMode` / `primaryAxisSizingMode` / `counterAxisSizingMode` / `constraints` / `textAutoResize`
-- 每个 in-scope 节点与邻居的 bounding box intersection 矩阵
-- 每个 Component Set 的 variant row matrix
-- 只有父子越界、裁切、变体不共享具体风险时才调用 `scripts/figma-validate-bounds.mjs`；离线审计禁止替代结构和视觉验证
+```text
+.figma/screenshot/<planweave-ref>/
+```
 
-## Bounds Audit
+The agent must perform actual visual inspection by opening each final screenshot. Inspect text clipping, occlusion, alignment, spacing, color, state, radius, and layer order. Export success and exit code 0 do not prove visual correctness.
 
-只有父子越界、裁切、局部坐标、reparent 或复杂父框 resize 存在具体风险时，才运行 `scripts/figma-validate-bounds.mjs`。离线审计只能补充，禁止替代结构和视觉验证。该脚本在不存在连接的情况下退化为纯 JSON 分析，不与 Figma daemon 通信。
+Visual failure routes to Correction Block and then reruns Visual Validation Block.
 
-## Correction Limit (Workflow 10)
+## Design-System Validation
 
-失败项进入固定循环：
+Check current-task tokens, typography, spacing, grid, icons, components, states, and responsive behavior against `docs/FIGMA_DESIGN_SYSTEM.md`. In-scope direct dependencies must match the document. Out-of-scope historical differences are reported, not fixed.
 
-1. 定位具体节点和原因；
-2. 执行最小修正；
-3. 重新运行受影响验证。
+## Correction Limit
 
-最多自动修正三轮（≤3）；第三轮后仍失败必须停止写入。失败报告必须列出失败检查、受影响节点和可见症状、三轮修正、当前 Figma 可用性以及恢复或人工处理方式。禁止隐藏失败、降低标准或只展示通过区域。
+Correction loop:
 
-## Terminal Reclamation Gate
+1. identify the specific node and failure;
+2. apply the smallest correction;
+3. rerun affected validation;
+4. submit evidence to PlanWeave.
 
-只有批准写入全部完成、三层验证通过、最终截图已实际打开并归档、当前范围符合设计系统且没有未披露失败、范围变化或未经批准降级时，才允许报告完成。归档必须执行：
+Automatic correction is capped at three rounds (`≤3`). After the third failed round, stop writes and submit recovery options.
 
-1. 生成 `final-summary.md`；
-2. 任务专属 `.figma/screenshot/<task-id>/` 目录彻底删除并验证零残留；
-3. 关键 evidence 与 `archive-events.jsonl` 落盘，临时 batch / 非关键 evidence 删除；
-4. `archiveStatus` 写入 `ARCHIVED`，`lease.json` 删除；
-5. 全部失败时 `archiveStatus=ARCHIVE_FAILED`，`close` 拒绝。
+## PlanWeave Final Review Gate
+
+Final Review Gate checks:
+
+- spec coverage;
+- design-system alignment;
+- executed PlanWeave block evidence;
+- geometry evidence;
+- visual evidence;
+- out-of-scope integrity;
+- screenshot artifact path;
+- self-reflection readiness.
+
+A failing final review returns `needs_changes` with the smallest responsible block.
+
+## Delivery Block
+
+Delivery reports:
+
+- final scope completed;
+- PlanWeave blocks and review gates passed;
+- key `figma-cli` evidence;
+- geometry evidence;
+- visual screenshot paths;
+- out-of-scope items;
+- remaining risks or recovery options when the task did not pass.

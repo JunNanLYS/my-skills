@@ -22,7 +22,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File <skill-directory>/scripts/in
 
 首版只自动安装 Windows。非 Windows 只有在现有 `figma-cli` 通过两个检查时才允许继续。
 
-## Singular Yolo Connection Gate
+## Pre-Spec Environment Gate
 
 每个新会话必须按下列顺序执行：
 
@@ -35,5 +35,7 @@ figma-cli status
 figma-cli status
   确认 PASS
 ```
+
+This command output is Pre-Spec Context Gate evidence for tasks requiring live Figma access.
 
 失败时按当前 `connect --help`、`status --help` 和 `daemon --help` 报告；失败层必须明确（CLI 缺失 / daemon 未运行 / token 失效 / CDP 断开）。任何情况下禁止自动调用 `daemon restart`。

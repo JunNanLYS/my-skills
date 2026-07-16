@@ -1,6 +1,8 @@
 # Naming Authority
 
-Single source of truth for component, screen, specimen, flow, and variant naming. The figma-skill runtime references this file from `SKILL.md` Mandatory Lookups for Workflow 2, 4A–4H, 5.
+Single source of truth for component, screen, specimen, flow, and variant naming. The figma-skill runtime references this file from `SKILL.md` Mandatory Lookups for Pre-Spec Context Gate, Spec Canvas, and PlanWeave implementation planning.
+
+PlanWeave blocks may cite naming decisions, but canonical naming grammar remains in this file.
 
 ## Component Path
 
