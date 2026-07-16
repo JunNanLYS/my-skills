@@ -50,3 +50,25 @@ Observed at HEAD `40db918 feat(figma-skill): activate v2 persistent workflows`:
 ## v2.2 remediation — 2026-07-15
 
 5 new tests across 3 files (plan-clipwhitelist, containment-gate, write-idempotency). Total suite: 225 pass, 0 fail. Two existing tests updated for v2.2 version bump (workflow-contract + task-state-cli). All v2.1 regressions stay green.
+
+## v3.0 PlanWeave migration — 2026-07-16 (14ec361)
+
+Deterministic run at the current HEAD recorded during Task 7:
+
+```bash
+node figma-skill/tests/validate-skill.mjs
+cd figma-skill && node --test tests/*.test.mjs
+powershell -NoProfile -ExecutionPolicy Bypass -File figma-skill/tests/install-figma-cli.Tests.ps1
+for f in figma-skill/scripts/*.mjs; do node --check "$f"; done
+git diff --check
+```
+
+Observed:
+
+- `validate-skill.mjs` → PASS.
+- `node --test tests/*.test.mjs` → 118 pass, 0 fail.
+- PowerShell installer tests → PASS.
+- `node --check` for remaining helper scripts → PASS.
+- `git diff --check` → PASS.
+
+Result: v3.0 runtime contract is structurally activated. PlanWeave is workflow authority; figma-cli remains Figma fact/write authority; old `.figma/tasks` ledger implementation and ledger-only tests are removed; screenshot and feedback artifacts remain.

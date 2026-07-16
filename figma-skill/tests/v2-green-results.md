@@ -83,3 +83,7 @@ Test updates for v2.2 bump:
 Total: `node --test tests/*.test.mjs` → 225 pass, 0 fail.
 
 Regression: all v2.1 tests still green. Containment Gate default behavior unchanged when `GATE=""`. `figma-cli create.*` default behavior unchanged when `--check-exists` not passed (documented as a contract; actual flag implementation lives in figma-cli companion repo).
+
+## Forward pointer — v3.0 PlanWeave migration
+
+v2 behavioral evidence remains historical. v3.0 replaces the `.figma/tasks` ledger with PlanWeave authority and removes task-state implementation/tests. See `tests/green-results.md` section "v3.0 PlanWeave migration — 2026-07-16" for the deterministic v3 run.
