@@ -2,44 +2,48 @@
 
 ## Workspace Path
 
-当前工作区是用户启动 Claude Code 或 Codex 时选择并授权的目录。命令目录变化和父级 `.git` 禁止重新定义它。
+`<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md` is the only design-system source for figma-skill work. The current workspace is the directory selected and authorized by the user when Claude Code or Codex starts. Changing shell directories or discovering a parent `.git` directory does not redefine the workspace.
 
-唯一规范来源固定为 `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`。
+## Pre-Spec Context Gate
+
+The design-system document must be read before spec drafting. This read is pre-spec evidence, not a step inside the implementation plan.
+
+The spec must cite the specific design-system rules that govern the task. If the document is missing or lacks rules needed for the task, the agent must stop spec drafting and propose the minimum design-system addition.
 
 ## Required Coverage
 
-文档必须覆盖当前任务所需的：
+The document must cover the current task's needed:
 
-- 设计原则与目标平台；
-- 颜色与语义角色；
-- 字体层级；
-- 间距与尺寸尺度；
-- 栅格与响应式断点；
-- 圆角、描边与阴影；
-- 图标体系；
-- 基础组件与状态；
-- 交互状态与可访问性底线；
-- 命名和组件组织。
+- design principles and target platforms;
+- colors and semantic roles;
+- typography hierarchy;
+- spacing and sizing scale;
+- grid and responsive breakpoints;
+- radius, stroke, and shadow rules;
+- icon system;
+- base components and states;
+- interaction states and accessibility floor;
+- naming and component organization.
 
 ## Missing Document
 
-按以下优先级建立当前任务的最小完整草案：
+When `docs/FIGMA_DESIGN_SYSTEM.md` is missing, build the minimum current-task draft using this priority order:
 
-1. 用户明确需求和品牌资料；
-2. 现有 Figma variables、styles 和 components；
-3. 目标页面稳定、重复的视觉规律；
-4. 前三者都无依据时才采用专业默认值。
+1. explicit user requirements and brand material;
+2. existing Figma variables, styles, and components read through `figma-cli`;
+3. stable repeated visual patterns in the target page;
+4. professional defaults only when the first three sources are absent.
 
-必须展示拟新增规则、依据、影响和范围外冲突，并等待明确设计系统审批后才写入文档。
+Show the proposed rules, basis, impact, and out-of-scope conflicts. Wait for explicit design-system approval before writing the document.
 
 ## Incomplete Document
 
-文档缺少当前任务所需规则时，必须只补充最小缺口并等待批准。禁止使用临时默认值绕过缺项，禁止先改 Figma 后补文档。
+When the document lacks current-task rules, add only the minimum missing rule set after approval. Do not use temporary defaults to bypass the gap. Do not modify Figma before the design-system gap is resolved.
 
 ## Conflict Policy
 
-文档优先于现有 Figma。必须修正已批准任务范围及其直接依赖；范围外历史冲突只报告，禁止修改。直接依赖修正影响其他页面时，必须在审批前披露。
+The document outranks existing Figma. Approved task scope and direct dependencies must be corrected to match the document. Out-of-scope historical conflicts are reported, not fixed. If correcting a direct dependency affects other pages, disclose that before approval.
 
 ## Approval Boundary
 
-设计系统审批只授权 Markdown 文档，禁止授权 Figma 写入。文档确定后必须进入独立的 Figma 执行方案审批。
+Design-system approval does not authorize Figma writes. After the design-system basis is approved, the task still needs an approved spec, approved implementation plan, and pre-write live revalidation before any Figma write.
