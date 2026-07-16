@@ -41,25 +41,25 @@ test("SKILL.md or references/naming.md declares the five reference authority are
   }
 });
 
-test("SKILL.md routes every Workflow 0..11 and entry 4A..4H through references", () => {
-  // SKILL.md is the compact router; it must enumerate Workflow stages and reference the authority for each.
-  for (const id of [
-    "Workflow 0A",
-    "Workflow 0B",
-    "Workflow 1",
-    "Workflow 2",
-    "Workflow 4",
-    "Workflow 4A",
-    "Workflow 5",
-    "Workflow 6",
-    "Workflow 7",
-    "Workflow 8",
-    "Workflow 9",
-    "Workflow 10",
-    "Workflow 11",
+test("SKILL.md routes every v3 lifecycle phase through references", () => {
+  const source = `${skill}\n${Object.values(refs).join("\n")}`;
+  for (const marker of [
+    "Requirements discovery",
+    "Pre-Spec Context Gate",
+    "PlanWeave Spec Canvas",
+    "Spec Review Gate",
+    "PlanWeave Implementation Canvas",
+    "Plan Review Gate",
+    "Pre-write Live Revalidation Block",
+    "Figma Write Blocks",
+    "Geometry Validation Block",
+    "Correction Block",
+    "Visual Validation Block",
+    "Final Review Gate",
+    "Delivery Block",
+    "Self-Reflection Block",
   ]) {
-    const source = `${skill}\n${Object.values(refs).join("\n")}`;
-    assert.ok(source.includes(id), `missing workflow: ${id}`);
+    assert.ok(source.includes(marker), `missing lifecycle marker: ${marker}`);
   }
 });
 
@@ -129,11 +129,12 @@ test("state-and-recovery.md anchors Component Set variant parity in Geometry Gat
   assert.match(refs.geometry, /Variant Parity[\s\S]{0,200}layoutSizingHorizontal[\s\S]{0,200}layoutSizingVertical/);
 });
 
-test("SKILL.md / state-and-recovery.md mandate Read-Only guard for Workflow 6/8/10", () => {
-  const joined = skill + "\n" + refs.state + "\n" + refs.execution;
-  assert.match(joined, /read[\s_-]*only/i);
-  assert.match(joined, /writeRequired\s*=\s*false|writeRequired\s+false/);
-  assert.match(joined, /Workflow\s+6[\s\S]{0,80}8[\s\S]{0,80}10/);
+test("SKILL.md / planning.md mandate read-only guards for Audit and Export", () => {
+  const joined = skill + "\n" + refs.planning + "\n" + refs.state + "\n" + refs.execution;
+  assert.match(joined, /Audit/);
+  assert.match(joined, /Export/);
+  assert.match(joined, /writeRequired=false/);
+  assert.match(joined, /forbidden unless the user starts a new write-capable task|禁止.*write-capable task/);
 });
 
 test("SKILL.md mandates the singular environment order", () => {
