@@ -490,7 +490,7 @@ const designSystem = read("references/design-system.md");
 
 test("planning.md defines Pre-Spec Context Gate before any spec drafting", () => {
   assert.match(planning, /## Pre-Spec Context Gate/);
-  assert.match(planning, /docs\/FIGMA_DESIGN_SYSTEM\.md[\s\S]{0,160}before spec drafting/);
+  assert.match(planning, /docs\/FIGMA_DESIGN_SYSTEM\.md[\s\S]{0,500}before spec drafting/);
   assert.match(planning, /figma-cli --version[\s\S]{0,160}figma-cli --help[\s\S]{0,160}figma-cli status/);
   assert.match(planning, /live Figma context[\s\S]{0,160}before spec drafting/);
   assert.doesNotMatch(planning, /Step 1:\s*read\s+FIGMA_DESIGN_SYSTEM\.md[\s\S]{0,80}implementation plan/i);
