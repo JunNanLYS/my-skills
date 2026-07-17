@@ -2,13 +2,15 @@
 
 ## 项目结构
 
-本仓库是一个 skill 集合仓库。**每个顶层目录都是一个独立的 skill**，目录名即 skill 名。每个 skill 目录内**至少包含一个 `SKILL.md`**（带 YAML frontmatter，定义 `name` / `model` / `category` / `description` / `version`），部分 skill 还会带 `references/` 子目录存放按需加载的参考文档。
+本仓库是一个 skill 集合仓库。**每个顶层目录都是一个独立的 skill**，目录名即 skill 名。每个 skill 目录内**至少包含一个 `SKILL.md`**（带 YAML frontmatter，定义 `name` / `description` / `version`），部分 skill 还会带 `references/` 子目录存放按需加载的参考文档。
 
 AI 在接到任务时，先按顶层目录名定位 skill，再读该目录下的 `SKILL.md`；不要把整个仓库当成一个项目去逐目录扫描。
 
 ## YAML Front Matter Must Be First
 
-Every SKILL.md file must begin with YAML front matter (`---` block containing `name`, `category`, `description`, `version`). This block must be the very first content in the file — no text, headings, or blank lines may appear before it. Codex will not recognize a skill if the YAML front matter is not at the top of the file.
+Every SKILL.md file must begin with YAML front matter (`---` block containing at minimum `name`, `description`, `version`). This block must be the very first content in the file — no text, headings, or blank lines may appear before it. Codex will not recognize a skill if the YAML front matter is not at the top of the file.
+
+Other fields such as `model` or `category` are optional. Imported upstream skills may omit them; only `name` / `description` / `version` are required.
 
 ### Versioning Rules
 
