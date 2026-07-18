@@ -65,21 +65,3 @@ Run from `main @ 2c62160` using two Opus 4.8 subagents, each producing 5 distinc
 ## Conclusion
 
 The v2.0 runtime contract is **structurally activated** and **behaviorally confirmed for 23/25 fresh-context pressure scenarios**. Two procedural FAILs are environmental (missing framework file path, agent self-judgment), not contract gaps. Behavioral coverage for micro-tests and live E2E remains pending.
-
-## v2.2 remediation — 2026-07-15
-
-New test files added:
-- `tests/plan-clipwhitelist.test.mjs` (5 tests, assertValidPlan helper)
-- `tests/containment-gate.test.mjs` (5 fixtures, Gate 7)
-- `tests/write-idempotency.test.mjs` (4 sub-tests via stub-figma-cli)
-
-New helper:
-- `tests/helpers/stub-figma-cli.mjs` (records state to `.figma-stub-state.json`)
-
-Test updates for v2.2 bump:
-- `tests/workflow-contract.test.mjs` — 2 test names + version assertion `2.1 → 2.2`
-- `tests/task-state-cli.test.mjs` — reflect version assertion `2.1 → 2.2`
-
-Total: `node --test tests/*.test.mjs` → 225 pass, 0 fail.
-
-Regression: all v2.1 tests still green. Containment Gate default behavior unchanged when `GATE=""`. `figma-cli create.*` default behavior unchanged when `--check-exists` not passed (documented as a contract; actual flag implementation lives in figma-cli companion repo).

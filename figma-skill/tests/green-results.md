@@ -46,7 +46,3 @@ Observed at HEAD `40db918 feat(figma-skill): activate v2 persistent workflows`:
 
 - v2.0 is **structurally activated** (commit `40db918`); deterministic suite plus references routing + state machine + Geometry gate ordering are all wired and locked.
 - v2.0 **behavioral coverage is pending** and documented in `tests/v2-green-results.md` and `tests/v2-e2e-results.md` until a SubAgent with sufficient quota resumes the fresh-context probes.
-
-## v2.2 remediation — 2026-07-15
-
-5 new tests across 3 files (plan-clipwhitelist, containment-gate, write-idempotency). Total suite: 225 pass, 0 fail. Two existing tests updated for v2.2 version bump (workflow-contract + task-state-cli). All v2.1 regressions stay green.
