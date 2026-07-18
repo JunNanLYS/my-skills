@@ -15,7 +15,7 @@ version: 3.0
 - SKILL.md 是 v3 compact router：只负责强制门禁、必读 reference、PlanWeave 生命周期、review contract、Figma artifact 边界和 Red Flags。
 - PlanWeave is the workflow authority：requirements discovery、spec approval、implementation plan approval、task/block dependencies、runner/reviewer prompts、`pass` / `needs_changes`、rework routing、completion 和 recovery 必须由 PlanWeave 承载。
 - `figma-cli` is the Figma fact and mutation authority：环境检查、live reads、writes、exports、screenshots、geometry evidence 和 validation data 必须来自 `figma-cli`。
-- `.figma/` 只保留 artifact duty：`.figma/screenshot/<planweave-ref>/` 保存视觉验收截图；`.figma/feedback/<timestamp>.md` 保存 self-reflection。`.figma/` 禁止承载 task plan、state、events、recovery 或 completion authority（历史 ledger 文件 `.figma/tasks/` 及旧术语不再 active state，不参与读/写/state/recovery）。
+- `.figma/` 只保留 artifact duty：`.figma/screenshot/<planweave-ref>/` 保存视觉验收截图；`.figma/feedback/<timestamp>.md` 保存 self-reflection。`.figma/` 禁止承载 task plan、state、events、recovery 或 completion authority（历史 ledger 命名例如 `.figma/tasks`、`lease.json`、`events.jsonl`、`archiveStatus` 不再是 active state）。
 - `scripts/{list-children,overlap-check,page-overlap-check,inspect-geometry,figma-validate-bounds}.mjs` 是只读 helper；`scripts/{apply-layout,resize-section}.mjs` 是写入 helper。所有 helper 只能通过批准的 `figma-cli run` 路径进入 Figma 任务。
 
 ## Non-Negotiable Rules
