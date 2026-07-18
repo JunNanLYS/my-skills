@@ -1,6 +1,6 @@
-# Geometry Verifier Pipeline
+# Geometry Verifier Pipeline (Workflow 9 / 10)
 
-Geometry Validation Block 层的可执行管线。七道闸门按顺序运行，任一 FAIL 立即停止验收并回到 Correction Block。
+Workflow 9 Geometry 层的可执行管线。七道闸门按顺序运行，任一 FAIL 立即停止验收并回到 Workflow 10。
 
 ## Gate 1 — Lint
 
@@ -42,10 +42,10 @@ Geometry Validation Block 层的可执行管线。七道闸门按顺序运行，
 
 ## Gate 6 — Visual
 
-- 截图保存路径: `.figma/screenshot/<planweave-ref>/`
+- 截图保存路径: `.figma/screenshot/<task-id>/`
 - 步骤: 实际打开每张最终截图，检查文字裁切、遮挡、对齐、间距、颜色、状态、圆角和层级
 - FAIL 条件: 任何视觉问题未修复
-- 视觉结论必须通过 PlanWeave evidence 提交，不作为任务状态存储
+- 视觉结论必须写入 `state.validation.visual.summary` 或 `final-summary.md`
 
 ## Gate 7 — Containment (v2.2+)
 
@@ -54,7 +54,7 @@ Geometry Validation Block 层的可执行管线。七道闸门按顺序运行，
 **命令:** `figma-cli run scripts/overlap-check.mjs`，修改入口常量：
 - `PARENT_IDS = [...]`（目标 Section / Frame / Component NodeId 列表）
 - `GATE = "containment"`
-- `CLIP_WHITELIST = [{ nodeId, rationale }, ...]`（来自 `the approved PlanWeave implementation plan's ClipWhitelist evidence`）
+- `CLIP_WHITELIST = [{ nodeId, rationale }, ...]`（来自 `plan.md##ClipWhitelist`）
 
 **算法:**
 
@@ -79,7 +79,7 @@ for parent in PARENT_IDS:
                    recommendation })
 ```
 
-**Whitelist contract:** Plan Review Gate checks every whitelist entry for nodeId and rationale。
+**Whitelist contract:** `plan.md` 必须包含 `## ClipWhitelist` 段（schema 由 `assertValidPlan` 校验）。每项 `{ nodeId, rationale }` 中 `rationale.length >= 5`。缺省视作空数组。
 
 **Gate 语义表:**
 
@@ -94,7 +94,7 @@ for parent in PARENT_IDS:
 
 **默认策略:** `clipsContent=true` 视为危险。设计者必须通过 `plan.md##ClipWhitelist` 显式 opt-in 并提供 `rationale`（如 scroll container、内部 card）。
 
-**修复:** Correction Block 收到 ISSUE 后，决定 (a) resize parent 到 `suggestedHeight`，(b) 重新设计不需要裁切，或 (c) 加 whitelist 项。auto-fix **不**自动执行。
+**修复:** Workflow 10 收到 ISSUE 后，决定 (a) resize parent 到 `suggestedHeight`，(b) 重新设计不需要裁切，或 (c) 加 whitelist 项。auto-fix **不**自动执行。
 
 ## Output Matrices
 
@@ -104,7 +104,7 @@ for parent in PARENT_IDS:
 - 兄弟相交矩阵: 来自 `unstack --dry-run` 与 `page-overlap-check.mjs`
 - 变体行 parity 矩阵: 每 Component Set 的一行 `(variant, H, V)`
 
-## Failure Priority (Correction Block)
+## Failure Priority (Workflow 10)
 
 1. lint 问题: 逐项修；可自动修复的项目用 `--fix`
 2. Top-level 重叠: 节点改到 `figma-cli canvas next` 推荐坐标
