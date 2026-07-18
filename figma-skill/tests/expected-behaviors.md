@@ -31,13 +31,4 @@ A run passes only when it chooses the required option and its next action preser
 | S24 | B | summarize completed task visual findings; delete only completed screenshot directory; verify zero residue; preserve active task directory |
 | S25 | B | invalidate affected HelpEvidence; query current top-level and nearest-command help |
 
-## v3 PlanWeave behaviors
-
-- Pre-Spec Context Gate happens before spec drafting. Design-system reads, figma-cli environment facts, and live Figma context are not implementation-plan steps.
-- PlanWeave is the workflow authority. Old `.figma/tasks` records can be historical evidence only after user-approved import or explicit reference, never active state.
-- `.figma/screenshot/<planweave-ref>/` stores visual evidence only.
-- `.figma/feedback/<timestamp>.md` stores self-reflection only.
-- Review gates return `pass` or `needs_changes`; `needs_changes` includes target block, reason, and required change.
-- Read-only `Audit` and `Export` tasks do not mutate Figma.
-
 For each run record: scenario ID, chosen option, next action, verbatim rationale, pass/fail, and any rationalization that weakens a mandatory rule.

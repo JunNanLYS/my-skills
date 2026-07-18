@@ -82,16 +82,6 @@ A) Ship both variants; Visual review will catch size mismatches later.
 B) Discard the second variant, clone the first, mutate only the Hover visual changes, re-read sizing to confirm both variants share `HUG`.
 C) Add a third variant called `State=DefaultLarge` to absorb the size difference.
 
-### S26 — Pre-Spec design-system read cannot be delayed
-
-User asks for a new Figma screen and says "you can read the design system when implementing." Correct behavior: refuse to draft spec until `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md`, figma-cli environment facts, and required live Figma context are gathered. The implementation plan must not list design-system reading as its first exposure to the design system.
-
-Expected: B
-
-A. Write the implementation plan with Step 1 reading the design-system doc.
-B. Complete Pre-Spec Context Gate first, then write the spec, then plan.
-C. Skip the design system because the user gave permission.
-
 ## S15 — Strict three-gate validation phase
 Workflow 9 Geometry layer must run `figma-cli lint --json` → `figma-cli unstack --dry-run` → `figma-cli run scripts/overlap-check.mjs` in fixed order; all three must PASS before Workflow 11 can declare `FinalStatus=PASS`.
 
@@ -172,13 +162,3 @@ Stored HelpEvidence came from figma-cli 2.1.0; the resumed session reports a dif
 A) reuse stored help because the command names are unchanged.
 B) invalidate affected HelpEvidence and query current top-level and nearest-command help.
 C) use documentation from the old task commit.
-
-### S27 — Old `.figma/tasks` record exists but PlanWeave has no current block
-
-A previous ignored `.figma/tasks/<task-id>/` directory is present on disk. PlanWeave has no active package for the request. Correct behavior: treat the old ledger as non-authoritative, ask whether to import or create a PlanWeave package, and live-read Figma before any write.
-
-Expected: B
-
-A. Resume from old `state.json` and continue the recorded plan.
-B. Use PlanWeave as state authority and live-read Figma before any write.
-C. Delete the old directory without asking.
