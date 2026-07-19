@@ -167,7 +167,7 @@ Approval
 | 16 | `Layout / Responsive.breakpoints` | 多断点组件必填；单断点允许写"only N" | 响应式行为未定义 | `Web 1280 only; mobile deferred to T-2026-0715-002.` |
 | 17 | `Conflict and Scope.in-scope fixes` | 必填，至少 1 条具名修改 | Gate 2 拒绝 | `仅新增 LoginCard Component Set + 联动 PrimaryButton 实例化` |
 | 18 | `Conflict and Scope.out-of-scope report` | **至少 3 条具名不修项** | Red Flag 第 1 条命中；"顺手改"风险 | `- Footer 对齐 — 属 T-2026-0715-009` |
-| 19 | `Baseline.Workflow 7 source` | 必填，给出命令 + 目标 id | 历史快照替代实时读取（Red Flag 第 3 条） | `figma-cli run scripts/list-children.mjs → <section_id>` |
+| 19 | `Baseline.Workflow 7 source` | 必填，给出命令 + 目标 id | 历史快照替代实时读取（Red Flag 第 3 条） | `figma-cli read tree <id> --depth <n> → <section_id>` |
 | 20 | `Baseline.batch order` | 必填，按可执行顺序逐条（**至少 3 步**） | 写入顺序不可控；orphan / overlap 风险 | `1. 新建 LoginCard frame → 2. figma-clone ... → 3. figma-combine-as-variants` |
 | 21 | `EvalRunFallback` | 不降级也要显式留位 | 不知是"有意不降级"还是"忘了写" | `# 此任务全程 figma-cli 原生命令可达，本段留空。` |
 | 22 | `Approval.designSystem` | 必填，给状态 + 时间戳 + 实体 | Gate 1 状态不可审计 | `PASS at 2026-07-15T10:00:00+08:00 (Gate 1)` |
@@ -238,9 +238,9 @@ Conflict and Scope
     - 移动端断点——不修（已安排到 T-2026-0715-002）。
 
 Baseline
-  Workflow 7 source: figma-cli run scripts/list-children.mjs
+  Workflow 7 source: figma-cli read tree <id> --depth <n>
                       → 抓 10 Components / Forms 的 child ids、type、AABB
-                      → figma-cli inspect --json <section_id> 拉 Section 当前尺寸
+                      → figma-cli read nodes --nodes <section_id> 拉 Section 当前尺寸
   batch order:
     1. 新建 LoginCard frame（含三个 state 子节点，作为 variant 模板）
     2. figma-clone → State=Default 副本 → 改 Error 文案与边框颜色
@@ -323,7 +323,7 @@ Approval
 3. **Variables / 布局描述含糊** → collections 必须用 `color/brand` 这种斜杠命名；binding 必须 `LoginCard.bg ← color/brand/surface` 这种「属性 ← token」格式；layoutMode 不允许 `auto`。
 4. **超出 scope 顺手改** → in-scope 列具体节点集；out-of-scope 至少 3 条命名的"不修项"，包括顺手改 footer 的诱惑。
 5. **EvalRunFallback 缺六字段直接上 node** → 不允许；必须先 `figma-cli <command> --help` 列 `NativeHelpChecked`，再列 `MissingNativeCapability`，然后才填 `TargetNodeIds / FallbackCodeScope / FallbackImpact / GeometryReaudit`；否则改用原生命令或拒绝执行。
-6. **Baseline 来源是历史快照** → 必须在 Workflow 7 用 `figma-cli run scripts/list-children.mjs` 或 `figma-cli inspect --json <id>` 实时拉；Red Flag 第 3 条同等适用。
+6. **Baseline 来源是历史快照** → 必须在 Workflow 7 用 `figma-cli read tree <id> --depth <n>` 或 `figma-cli read nodes --nodes <id1,...>` 实时拉；Red Flag 第 3 条同等适用。
 
 把 Good Example 视为可审批的最低信息量；只要任何一段接近 Anti Example 的措辞，Gate 2 直接打回。
 
@@ -380,7 +380,7 @@ Updated: 2026-07-15T12:36:12.753Z
 
 软不足（P1）：
 
-- 复用组件 `TitleBar / NavItem` 没给节点 id，`figma-cli run scripts/list-children.mjs` 时无法瞬时定位 instance source。
+- 复用组件 `TitleBar / NavItem` 没给节点 id，`figma-cli read tree <id>` 时无法瞬时定位 instance source。
 - `AISummaryHero` 列"3 状态"但 Plan 未说明是 Component Set 还是 3 个独立 Component；`NewsTabs` 同理。
 - `NewsListItem` 与 `NewsCard` 关系未说明（行卡 vs Hero 卡）——靠执行员临场判定违反"决策必须在 Plan 里做完"原则。
 - `NewsList × N` 缺 N 实际取值。
@@ -434,13 +434,13 @@ Conflict and Scope
     - 移动端断点（已安排 T-2026-0715-002）。
 
 Baseline
-  Workflow 7 source: figma-cli run scripts/list-children.mjs → <section_id>; figma-cli canvas next 拉真实 (x,y)
+  Workflow 7 source: figma-cli read tree <section_id> --depth 2 → <section_id>; figma-cli read list → 拉当前 Page top-level 真实 (x,y)
   batch order:
-    1. figma-cli canvas next → 拿 Section 放置坐标
+    1. 基于 `figma-cli read list` 输出计算 next 坐标；待 `canvas next` 原生实现后替换
     2. 在 01 Library / 10 Components / Forms 建 Content/News/* 13 个 component（按 data-display → input → feedback 顺序）
-    3. figma-cli run scripts/list-children.mjs → 重新读新建 component 的 node ids
+    3. figma-cli read tree <library_section_id> --depth 2 → 重新读新建 component 的 node ids
     4. 在 02 Screens / News Section 内建 Screen + 实例化 TitleBar / NavItem + 嵌入 Content/News/* 13 个
-    5. figma-cli run scripts/inspect-geometry.mjs 校验 1240×868
+    5. figma-cli read nodes --nodes <screen_id> 校验 1240×868
 
 EvalRunFallback
   # 此任务全程 figma-cli 原生命令可达，本段留空。

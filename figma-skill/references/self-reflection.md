@@ -28,8 +28,8 @@ Workflow 12 是 figma-skill 的最终阶段。无论本任务在 Workflow 11 之
 每份自省文件必须满足以下结构，否则 `SelfReflectionGate=FAIL`：
 
 ```text
-# figma-skill v2.1 Self-Reflection
-<!-- skill-version: 2.1 -->
+# figma-skill v3.0 Self-Reflection
+<!-- skill-version: 3.0 -->
 
 ## 1. 问题列表 (Problems)
 
@@ -46,7 +46,7 @@ Workflow 12 是 figma-skill 的最终阶段。无论本任务在 Workflow 11 之
 
 要求：
 
-1. 首行必须是 `# figma-skill v2.1 Self-Reflection`，第二行是 `<!-- skill-version: 2.1 -->` 注释行；版本字串必须与当前 SKILL.md 的 `version` 字段一致。
+1. 首行必须是 `# figma-skill v3.0 Self-Reflection`，第二行是 `<!-- skill-version: 3.0 -->` 注释行；版本字串必须与当前 SKILL.md 的 `version` 字段一致。
 2. 两个表头**必须同时存在**：`问题列表` 与 `优化方向`；只写一张视为 Gate FAIL。
 3. 每个表至少 1 行；空表或只有表头同样 FAIL。
 4. 优先级列只允许 `P0 / P1 / P2`，含义：
@@ -60,7 +60,7 @@ Workflow 12 是 figma-skill 的最终阶段。无论本任务在 Workflow 11 之
 `figma-task-state.mjs reflect` 是唯一允许写入自省文件的入口：
 
 ```text
-figma-task-state.mjs reflect --skill-version 2.1 --output .figma/feedback/<timestamp>.md
+figma-task-state.mjs reflect --skill-version 3.0 --output .figma/feedback/<timestamp>.md
 ```
 
 行为：

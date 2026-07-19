@@ -16,8 +16,9 @@ const required = [
   "references/geometry-verifier.md",
   "references/naming.md",
   "references/self-reflection.md",
-  "scripts/install-figma-cli.ps1",
+  // scripts/install-figma-cli.ps1 removed in v3 (Rust CLI is bundled in bin/).
   "scripts/figma-validate-bounds.mjs",
+  // DEPRECATED in v3 — physically retained for archival; do not invoke.
   "scripts/list-children.mjs",
   "scripts/overlap-check.mjs",
   "scripts/page-overlap-check.mjs",
@@ -38,10 +39,12 @@ for (const file of required) {
 
 const skill = read("SKILL.md");
 assert.ok(skill.startsWith("---\n"), "frontmatter must be first");
-for (const field of ["name: figma-skill", "model:", "category:", "description:"]) {
+// Only name / description / version are required frontmatter fields (CLAUDE.md).
+// model / category are optional; do not assert them.
+for (const field of ["name: figma-skill", "description:"]) {
   assert.match(skill, new RegExp(field.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 }
-assert.match(skill, /^version: 2\.1$/m);
+assert.match(skill, /^version: 3\.0$/m);
 
 for (const phrase of [
   "figma-cli",
@@ -64,8 +67,8 @@ const runtimeMarkdown = required
   .join("\n");
 assert.doesNotMatch(runtimeMarkdown, /\.figma\/cache\.json/);
 assert.doesNotMatch(runtimeMarkdown, /figma-guide/);
-assert.match(read("references/installation.md"), /GitHub Releases/);
-assert.match(read("references/installation.md"), /Yolo/);
+assert.match(read("references/installation.md"), /figma-cli daemon status/);
+assert.match(read("references/installation.md"), /Yolo|Singular Yolo|Yolo Connection Gate/i);
 assert.match(read("references/validation.md"), /\.figma\/screenshot\/<task-id>\//);
 assert.doesNotMatch(read("references/validation.md"), /temp\/figma-screenshot/);
 assert.match(read("references/execution.md"), /duplicate\s*\/|duplicate\b/);
@@ -76,7 +79,7 @@ assert.match(read("references/geometry-verifier.md"), /Variant Parity/);
 
 const scenarioCoverage = {
   S1: [/设计系统审批/, /Figma.*审批/s, /禁止.*Figma 写入/s],
-  S2: [/GitHub Releases/, /禁止使用 Figma MCP/, /figma-cli connect/, /figma-cli status/],
+  S2: [/bin\/figma-cli\.exe|daemon status/, /禁止使用 Figma MCP/, /figma-cli connect/, /figma-cli daemon status/],
   S3: [/缺少当前任务规则/, /最小必要规范/, /等待明确批准/],
   S4: [/figma-cli --help/, /subcommand/, /子命令/],
   S5: [/文档优先/, /直接依赖/, /范围外历史冲突只报告/],
@@ -198,9 +201,9 @@ function assertConnectOrder() {
   const installation = read("references/installation.md");
   assert.match(installation, /figma-cli\s+--version/);
   assert.match(installation, /figma-cli\s+--help/);
-  assert.match(installation, /figma-cli\s+status/);
+  assert.match(installation, /figma-cli\s+daemon\s+status/);
   assert.match(installation, /figma-cli\s+connect/);
-  assert.match(skill, /--version[\s\S]{0,200}--help[\s\S]{0,200}status[\s\S]{0,200}connect/);
+  assert.match(skill, /--version[\s\S]{0,200}--help[\s\S]{0,200}daemon\s+status[\s\S]{0,200}connect/);
   assert.doesNotMatch(installation, /^##\s+Concurrent Agent Connection\s*$/m);
 }
 
@@ -213,8 +216,8 @@ function assertHelpDiscovery() {
     "NNR must require --help lookup on first use",
   );
   assert.ok(
-    nnrBlock.includes("figma-cli 之外的运行时") || nnrBlock.includes("eval/run"),
-    "NNR must gate non-CLI runtimes via eval/run gate",
+    nnrBlock.includes("figma-cli eval <CODE>") || nnrBlock.includes("eval/run"),
+    "NNR must gate non-CLI runtimes via eval gate",
   );
   assert.match(
     read("references/execution.md"),

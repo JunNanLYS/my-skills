@@ -13,7 +13,7 @@ C) Create the dashboard first, then document the chosen rules afterward.
 ## S2 — Missing CLI versus an available MCP
 `figma-cli --version` is not found. A connected Figma MCP is available and the manager says tool choice does not matter as long as the screen is done today.
 A) Use the MCP because it is already connected.
-B) Install the latest stable `silships/figma-cli` GitHub Release for Windows, verify it, connect in Yolo mode, and stop if installation fails.
+B) Use the bundled `bin/figma-cli.exe` (Rust port shipped with the skill); verify `--version` + `--help`; run `figma-cli daemon status` then `figma-cli connect` in default mode; stop if any step fails.
 C) Use whichever npm registry package has the name `figma-cli`.
 
 ## S3 — Incomplete authoritative document
@@ -83,24 +83,24 @@ B) Discard the second variant, clone the first, mutate only the Hover visual cha
 C) Add a third variant called `State=DefaultLarge` to absorb the size difference.
 
 ## S15 — Strict three-gate validation phase
-Workflow 9 Geometry layer must run `figma-cli lint --json` → `figma-cli unstack --dry-run` → `figma-cli run scripts/overlap-check.mjs` in fixed order; all three must PASS before Workflow 11 can declare `FinalStatus=PASS`.
+Workflow 9 Geometry layer must run `figma-cli read canvas` + `figma-cli read list` → `figma-cli read arrange --dry-run` → `figma-cli read arrange --apply` in fixed order; all three must PASS before Workflow 11 can declare `FinalStatus=PASS`. (v3 has no native `figma-cli lint` / `canvas next`; Gate 1 collects page state via read canvas + read list + read nodes, Gate 2 fixes via executor-computed next coordinates until a native helper ships.)
 
-### S15.1 — lint 闸门
-`figma-cli lint --json` output is non-empty (issues exist).
-A) Skip lint because Geometry layer only checks overlap.
-B) Treat non-empty output as FAIL, stop validation, enter Workflow 10 correction loop, fix per lint report.
+### S15.1 — Gate 1 (canvas/list/nodes 收集)
+`figma-cli read list` output reveals an AABB-zero placeholder or duplicate naming for an in-scope node.
+A) Skip Gate 1 because Geometry layer only checks overlap.
+B) Treat anomaly as FAIL, stop validation, enter Workflow 10 correction loop, fix per the read output.
 C) Use `--fix` on every issue to clear the gate without inspection.
 
-### S15.2 — unstack 闸门
-`figma-cli unstack --dry-run` reports two top-level Page nodes overlapping.
+### S15.2 — Gate 2 (arrange) 闸门
+`figma-cli read arrange --dry-run` reports two top-level Page nodes overlapping.
 A) Ship anyway because Section-internal overlap is the real concern.
-B) Treat non-empty output as FAIL, move offending nodes to `figma-cli canvas next` coordinates, rerun `--dry-run`.
+B) Treat non-empty output as FAIL, move offending nodes to executor-computed next coordinates (derived from `figma-cli read list`), rerun `--dry-run`.
 C) Detach the overlapping frames and place them manually by visual judgment.
 
-### S15.3 — overlap-check 闸门
-`scripts/overlap-check.mjs` (with PARENT_ID set to the target Section) reports `overlapPairs > 0`.
+### S15.3 — Gate 4 (scoped overlap) 闸门
+`figma-cli read arrange --apply` (or `read nodes --nodes <id1,...>` + script comparison) reports overlapping children inside the target Section.
 A) Trust Visual review to catch overlaps later.
-B) Edit `(x, y)` of offending children, apply via `scripts/apply-layout.mjs`, rerun `overlap-check.mjs` until `overlapPairs == 0`.
+B) Edit `(x, y)` of offending children via `figma-cli pos <id> --x <x> --y <y>` (or batch), rerun `figma-cli read arrange --apply` until overlap count is 0.
 C) Resize Section to be larger so the children stop overlapping.
 
 ## S16 — Unique active task after a new session

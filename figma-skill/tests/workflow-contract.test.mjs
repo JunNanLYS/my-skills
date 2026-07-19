@@ -26,12 +26,12 @@ const refs = {
   designSystem: readRef("design-system.md"),
 };
 
-test("frontmatter description is trigger-only and version is 2.2", () => {
+test("frontmatter description is trigger-only and version is 3.0", () => {
   assert.match(SKILL, /^---[\s\S]+?---\n/, "SKILL.md must start with frontmatter");
   const fm = SKILL.match(/^---([\s\S]+?)---/)[1];
   assert.match(fm, /\bname:\s*figma-skill\b/);
   assert.match(fm, /\bdescription:\s*Use when\b/);
-  assert.match(fm, /\bversion:\s*2\.2\b/);
+  assert.match(fm, /\bversion:\s*3\.0\b/);
 });
 
 test("SKILL.md stays within the v2 size budget", () => {
@@ -136,8 +136,10 @@ test("geometry-verifier.md orders the six gates exactly", () => {
   }
 });
 
-test("geometry-verifier.md labels unstack as duplicate-origin only", () => {
-  assert.match(refs.geometry, /unstack[\s\S]{0,200}duplicate-origin/i);
+test("geometry-verifier.md labels arrange as duplicate-origin only", () => {
+  // v3 replaces v2 `unstack --dry-run` with `read arrange --dry-run`.
+  // Both are scoped to top-level duplicate-origin detection, not a general AABB matrix.
+  assert.match(refs.geometry, /arrange[\s\S]{0,200}duplicate-origin/i);
   assert.ok(!/general\s+AABB/.test(refs.geometry));
   assert.ok(!/JSON\s+output/.test(refs.geometry));
 });

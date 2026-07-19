@@ -1,30 +1,29 @@
 ---
 name: figma-skill
-model: sonnet
-category: design
 description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 2.2
+version: 3.0
 ---
 
-# Figma End-to-End Execution v2
+# Figma End-to-End Execution v3
 
-将用户需求转化为可编辑、可复用、经过实际截图验收的 Figma 产品 UI。v2 引入跨会话持久任务账本（`.figma/`），状态机、租约与压缩归档共同保证跨任务可恢复但不替代 live Figma 读取。Web、桌面端、移动端 UI 与设计系统同等适用。
+将用户需求转化为可编辑、可复用、经过实际截图验收的 Figma 产品 UI。v3 切换到 Rust 重写的 `figma-cli`（位于 `bin/`），所有 Figma 读取、创建、修改、导出与验证一律走 `figma-cli <group> <verb>` 子命令；`.figma/` 跨会话任务账本保留不变。Web、桌面端、移动端 UI 与设计系统同等适用。
 
 ## Authority Invariant
 
 - SKILL.md 是 v2 路由合约：概述、强制门禁、必读 reference、状态机摘要、审批门禁、Workflow I/O 契约、归档门禁、Red Flags。
 - 所有具体名词解释、执行细节、几何验证、命令矩阵、术语表仅在 `references/`。Workflow 阶段必须加载对应 reference，禁止用 SKILL.md 替代任何一次加载。
 - `.figma/` 是跨会话任务账本；它记录计划、Todo、事件、租约、evidence 与 visual summary，但 **永远不替代 live Figma 读取或当前 `--help` 查询**。所有结论必须由最新一次实时读取或会话内 help 输出交叉验证。
-- `scripts/figma-task-state.mjs` 与 `scripts/figma-validate-bounds.mjs` 是离线助手，不与 Figma daemon 通信，不调用 git，不需要 eval/run gate。
+- `scripts/figma-task-state.mjs` 与 `scripts/figma-validate-bounds.mjs` 是离线助手（用 `node scripts/<name>.mjs ...` 调用），不与 Figma daemon 通信，不调用 git，不需要 eval gate。
+- `scripts/{apply-layout,resize-section,list-children,overlap-check,page-overlap-check,inspect-geometry}.mjs` 在 v3 已退役（`figma-cli run <file>` 通道不存在）；物理保留以备历史归档回放，但**禁止在 v3 任务中 invoke**。
 
 ## Non-Negotiable Rules
 
-- 所有 Figma 读取、创建、修改、导出和验证必须使用 `figma-cli`。禁止使用 Figma MCP、其他 Figma CLI 或 GUI 自动化作为替代路径。
-- 每个新会话首次执行 Figma 任务前必须按顺序运行 `figma-cli --version`、`figma-cli --help`、`figma-cli status`；未连接才允许 `figma-cli connect`，最后再 `figma-cli status` 确认。详细顺序见 `references/installation.md`。
+- 所有 Figma 读取、创建、修改、导出和验证必须使用 `figma-cli`（`bin/figma-cli.exe`）。禁止使用 Figma MCP、其他 Figma CLI 或 GUI 自动化作为替代路径。
+- 每个新会话首次执行 Figma 任务前必须按顺序运行 `figma-cli --version`、`figma-cli --help`、`figma-cli daemon status`；未连接才允许 `figma-cli connect`，最后再 `figma-cli daemon status` 确认。详细顺序见 `references/installation.md`。
 - `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md` 是唯一设计规范来源；设计系统审批与 Figma 写入审批是两次独立审批，前者禁止授权后者。
-- 只有 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit` 六字段在 Workflow 6 的 `EvalRunFallback` 段完整且经用户批准时，才允许使用 `eval/run`。禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令是否存在、参数或行为。
-- 任何 `eval/run` 与 `figma-cli` 之外的运行时（node / python / pwsh / sh / 直接读 JSON / 直接调 Figma REST API 等）按上述六字段同等待遇。例外：`scripts/figma-validate-bounds.mjs`、`scripts/figma-task-state.mjs`（前者离线 JSON 分析，后者离线任务账本）。
-- 项目预设助手脚本 `scripts/{list-children,overlap-check,page-overlap-check,inspect-geometry}.mjs`（只读）由 eval/run gate 预设批准，无需在 CommandPlan 中再次提供六字段；`scripts/{apply-layout,resize-section}.mjs`（写动作）仍必须经 Workflow 6 审批，且 `TASK_ID` / `BASELINE_REVISION` / `PARENT_IDS` / `EXPECTED_PARENT_TYPE` / `PAD_X` / `PAD_Y` / `PLANS` 等入口常量必须在 CommandPlan 中显式列出并经用户审批。
+- 只有 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit` 六字段在 Workflow 6 的 `EvalRunFallback` 段完整且经用户批准时，才允许使用 `figma-cli eval <CODE>`（顶层子命令）。禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令是否存在、参数或行为。
+- 任何 `figma-cli eval <CODE>` 之外的运行时（node / python / pwsh / sh / 直接读 JSON / 直接调 Figma REST API 等）按上述六字段同等待遇。例外：`node scripts/figma-validate-bounds.mjs`（离线 JSON 分析）、`node scripts/figma-task-state.mjs`（离线任务账本）。
+- v3 起 `scripts/{apply-layout,resize-section,list-children,overlap-check,page-overlap-check,inspect-geometry}.mjs` 不再是预设助手；任何 v3 任务必须改用 `figma-cli <group> <verb>`（如 `figma-cli pos <id> --x <x> --y <y>` / `figma-cli size <id> --width <w> --height <h>` / `figma-cli read list` / `figma-cli read nodes --nodes <id1,id2,...>` / `figma-cli read arrange --apply`）。
 - duplicate、reparent、unwrap、组件化、组合 variants、删除重建或大幅层级调整后，必须重新读取 NodeId 和当前几何，再写入。任务上下文（`.figma/observedContext`、`state.observedContext`）只能辅助记录，不能替代 live 读取。
 - 验证失败最多自动修正三轮（≤3）；仍失败必须停止写入并完整报告。
 - 硬性要求必须用「必须」「禁止」「只有……才允许」；禁止用弱措辞稀释门禁。
@@ -148,7 +147,7 @@ Workflow 12（自省归档 / feedback 落盘）   → references/self-reflection
 Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLETED / FAILED / CANCELLED / SUPERSEDED`。自省不重复 Figma 写入，只生成一份反思文件供后续会话与维护者使用。
 
 - 存储路径：`<Current workspace>/.figma/feedback/<timestamp>.md`，其中 `<timestamp>` 使用 ISO 8601 文件名安全形式（`YYYY-MM-DDTHH-MM-SS`，本地时区），文件名为单一时间戳，不含 task id。
-- 文件首行必须以 `# figma-skill v2.2 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 2.2 -->` 注释；以下为问题与优化方向两个表。
+- 文件首行必须以 `# figma-skill v3.0 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 3.0 -->` 注释；以下为问题与优化方向两个表。
 - 问题列表表头：`# | 问题 | 出现的 Workflow | 影响`。每行写一个具体观察（例如："Workflow 6 审批后立即 ack，没有要求 plan.md 重新打开"。）。
 - 优化方向表头：`# | 优化方向 | 优先级 | 关联问题`。每行写一条可执行改进（例如："将 plan 重读纳入 Workflow 8 起步动作"。优先级只允许 `P0 / P1 / P2`。
 - 两个表必须同时存在；缺少任何一张视为本 Workflow `Gate=FAIL` 并触发一次重新自省，禁止直接关闭会话。
@@ -168,15 +167,16 @@ Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLE
 - "之前那条 .figma 截图只是临时检查，可以保留" → 错；只有归档完成且零残留才允许声明完成。
 - "Workflow 11 收尾后直接关掉就行，不用写自省" → 错；任何归档结束的会话都必须落盘 `.figma/feedback/<timestamp>.md`，否则 `SelfReflectionGate=FAIL`。
 - "重名同 parent 节点必须 FAIL 或显式 `--reuse`，不得静默新建。" → 错；`figma-cli create.*` 默认 `--check-exists` 触发 DUPLICATE 检测时，agent 必须先 live-read 已有节点、确认意图，再决定 `--reuse` 或改名重试，禁止静默 reuse。
+- "`figma-cli run scripts/<file>` 应该还能用吧" → 错；v3 起 Rust CLI 没有 `run` 通道，所有 figma-cli 写入必须走 `figma-cli <group> <verb>` 子命令；scripts/ 下 .mjs 仅两个离线分析工具可调。
 
 ## Task Entry Pattern (Workflow 0B)
 
 每个具体任务（Create / Modify / Audit / Migrate / Export）必须：
 
-1. `figma-task-state.mjs init-project`（已存在则跳过）；
-2. `figma-task-state.mjs create --task <id> --title ... --type <type> --write-required <bool>`；
-3. Workflow 6 审批通过后 `figma-task-state.mjs acquire`；
-4. 进入 Workflow 7 记录 baseline；
-5. 后续 Workflow 9 / 10 / 11 / 12 都通过 `checkpoint` 写入事务。
+1. `node scripts/figma-task-state.mjs --project "$PWD" init-project`（已存在则跳过）；
+2. `node scripts/figma-task-state.mjs --project "$PWD" create --task <id> --title ... --type <type> --write-required <bool>`；
+3. Workflow 6 审批通过后 `node scripts/figma-task-state.mjs --project "$PWD" acquire`；
+4. 进入 Workflow 7 记录 baseline（命令见 `references/execution.md` Geometry-aware Commands 表格）；
+5. 后续 Workflow 9 / 10 / 11 / 12 都通过 `node scripts/figma-task-state.mjs checkpoint` 写入事务。
 
-概念问题不创建任务账本。
+概念问题不创建任务账本。`figma-task-state.mjs` 与 `figma-validate-bounds.mjs` 用 node 直接调用，不走 figma-cli。
