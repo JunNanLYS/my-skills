@@ -2,36 +2,23 @@
 
 ## Install Once (Required First Run)
 
-`figma-skill` 的 Rust CLI **不会**自动出现在 `PATH` 上——每个用户首次使用本 skill 时必须手动跑一次安装脚本，把 `figma-skill/bin/` 下的两个 binary 复制到一个**单一规范化位置**，再把那个位置写入 user PATH。这一步只需做一次：
+`figma-skill` 的 Rust CLI **不会**自动出现在 `PATH` 上。每个用户首次使用本 skill 时必须手动跑一次安装脚本，把 `figma-skill/bin/` 下的两个 binary 复制到一个**单一规范化位置**，再把那个位置写入 user PATH。这一步只需做一次：
 
-```bash
-# 在 skill 根目录下：
-node scripts/install-figma-cli.ps1
-# 或：
+```powershell
+# PowerShell (pwsh 5.1+ / 7+)：
 pwsh -NoProfile -File scripts/install-figma-cli.ps1
+# 或 Windows PowerShell 5.1：
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-figma-cli.ps1
 ```
 
-脚本做三件事：
+脚本做两件事：
 
-1. 复制 `figma-skill/bin/figma-cli.exe` 与 `figma-daemon.exe` 到 `%LOCALAPPDATA%\figma-cli\bin\`（即 `C:\Users\<user>\AppData\Local\figma-cli\bin\`）。
-2. SHA-256 校验：源 binary 与目标 binary 哈希一致则**跳过复制**——脚本幂等，可重复跑。
-3. 用 `[Environment]::SetEnvironmentVariable("Path", ..., "User")` 把 `%LOCALAPPDATA%\figma-cli\bin\` 加入 user-level PATH（HKCU\Environment），已存在则跳过。
+1. 复制 `figma-skill/bin/figma-cli.exe` 与 `figma-daemon.exe` 到 `%LOCALAPPDATA%\figma-cli\bin\`（即 `C:\Users\<user>\AppData\Local\figma-cli\bin\`），SHA-256 校验——源 / 目标 hash 一致则跳过；可重复跑。
+2. 把 `%LOCALAPPDATA%\figma-cli\bin\` 加入 user-level PATH（HKCU\Environment），已存在则跳过。
 
 **为什么需要这个独立位置**：skill 目录本身会通过 `sync-skills.mjs` 复制到多个位置（`~/.claude/skills/figma-skill/bin/`、`~/.codex/skills/figma-skill/bin/` 等）；每个 agent 都把 skill bin 加到 PATH 会导致重复 entry 与版本漂移。`%LOCALAPPDATA%\figma-cli\bin\` 是**单一规范化 runtime location**，所有 agent / shell / IDE 都从这里加载。
 
-**支持参数**：
-
-```bash
-# 预览（不复制、不改 PATH）
-node scripts/install-figma-cli.ps1 -WhatIf
-# 或
-pwsh -NoProfile -File scripts/install-figma-cli.ps1 -WhatIf
-
-# 自定义源 / 目标
-node scripts/install-figma-cli.ps1 -SourceBin C:\path\to\other\bin -InstallBin D:\tools\figma-cli\bin
-```
-
-**注意**：脚本只写 user PATH，不会自动通知已经打开的 shell。每个 agent 启动新进程时自然继承新 PATH；老 shell 需要重启或手动 `refreshenv`（PowerShell）。
+**注意**：脚本只写 user PATH，不会自动通知已经打开的 shell。新开任意 shell（cmd / pwsh / Windows Terminal / mintty / VS Code 终端）即可看到 `figma-cli` / `figma-daemon` / `pwsh` 可用。老 shell 需重启或手动 `refreshenv`（PowerShell）。
 
 ## Existing CLI Gate
 
