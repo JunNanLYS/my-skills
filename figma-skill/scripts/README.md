@@ -6,17 +6,18 @@
 
 | 类别 | 数量 | 调用方式 |
 | --- | --- | --- |
-| **离线分析工具（active）** | 2 | `node scripts/<name>.mjs ...` |
+| **Active — 安装与离线分析** | 3 | `node scripts/<name>.mjs ...` 或 `node scripts/<name>.ps1 ...` |
 | **DEPRECATED in v3（archived, do not invoke）** | 6 | 保留以备历史归档回放；禁止在 v3 任务中调用 |
 
-## Active — 离线分析工具
+## Active — 安装与离线分析工具
 
 | 脚本 | 调用 | 用途 | 典型 Workflow |
 | --- | --- | --- | --- |
+| `install-figma-cli.ps1` | `node scripts/install-figma-cli.ps1` 或 `pwsh -NoProfile -File scripts/install-figma-cli.ps1` | v3 安装脚本：把 `figma-skill/bin/{figma-cli,figma-daemon}.exe` 复制到 `%LOCALAPPDATA%\figma-cli\bin\` 并写入 user PATH。幂等（SHA-256 校验），多 agent 共用同一规范化路径。 | 安装 / 升级 / 卸载 figma-cli |
 | `figma-task-state.mjs` | `node scripts/figma-task-state.mjs --project <root> <subcommand>` | v2/v3 跨会话任务账本 CLI（init-project / create / checkpoint / archive / close / reflect / …）。**不**与 Figma daemon 通信、**不**调用 git。 | Workflow 0B / 7 / 11 / 12 |
 | `figma-validate-bounds.mjs` | `node scripts/figma-validate-bounds.mjs <args>` | 离线 JSON 分析（无需 daemon），验证 bounds 合规 | Workflow 9 辅助 |
 
-详见 `references/state-and-recovery.md`（任务账本）与 `references/validation.md`（Bounds Audit 段）。
+详见 `references/installation.md`（install 流程）、`references/state-and-recovery.md`（任务账本）、`references/validation.md`（Bounds Audit）。
 
 ### 用法速查
 
@@ -76,7 +77,6 @@ node figma-skill/scripts/figma-validate-bounds.mjs \
 | `page-overlap-check.mjs` | Page 直系子节点 AABB 相交矩阵 | `figma-cli read arrange --apply`（top-level 模式） |
 | `apply-layout.mjs` | 两阶段 `{id, x, y}[]` 移动计划执行 | `figma-cli pos <id> --x <x> --y <y>` + `figma-cli batch ...` |
 | `resize-section.mjs` | 容错收敛 Section 至 children bbox + padding | `figma-cli size <id> --width <w> --height <h>` |
-| `install-figma-cli.ps1` | Windows 安装 figma-cli | **删除**；Rust CLI 已随 skill 仓库附带在 `bin/figma-cli.exe` |
 
 > **DEPRECATED 警告**：以上脚本在 v3 任务中**禁止 invoke**。它们在 v2 依赖 `figma-cli run <file>` 通道（v3 已移除），无法工作。文件保留仅用于历史归档回放与回滚演练。
 

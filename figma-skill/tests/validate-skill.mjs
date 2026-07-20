@@ -16,7 +16,8 @@ const required = [
   "references/geometry-verifier.md",
   "references/naming.md",
   "references/self-reflection.md",
-  // scripts/install-figma-cli.ps1 removed in v3 (Rust CLI is bundled in bin/).
+  // v3 manual installer: copies bin/ to %LOCALAPPDATA%\figma-cli\bin\ + writes user PATH.
+  "scripts/install-figma-cli.ps1",
   "scripts/figma-validate-bounds.mjs",
   // DEPRECATED in v3 — physically retained for archival; do not invoke.
   "scripts/list-children.mjs",

@@ -1,236 +1,127 @@
+#!/usr/bin/env pwsh
+# install-figma-cli.ps1 (v3) — manual installer for the Rust-port figma-cli
+#
+# Source of truth : <skill-root>/bin/figma-cli.exe + figma-daemon.exe
+# Install target  : %LOCALAPPDATA%\figma-cli\bin\  (canonical runtime location)
+# PATH update     : adds the install bin to user PATH (HKCU\Environment)
+#
+# Idempotent — re-running this script with the same source bytes is a no-op.
+# Safe to call from any agent / shell — the install path is a single
+# canonical location shared across all sessions.
+
 [CmdletBinding()]
 param(
-    [switch]$PlanOnly,
-    [string]$ReleaseMetadataPath,
-    [ValidateSet("AMD64", "ARM64")]
-    [string]$Architecture = $env:PROCESSOR_ARCHITECTURE,
-    [string]$InstallRoot = (Join-Path $env:LOCALAPPDATA "Programs\figma-cli"),
-    [string]$TrustedChecksumPath,
-    [switch]$SkipExistingCheck
+    # Override the source directory that contains figma-cli.exe / figma-daemon.exe.
+    # Default: <skill-root>/bin/  (resolved relative to this script).
+    [string]$SourceBin,
+
+    # Override the install directory. Default: %LOCALAPPDATA%\figma-cli\bin
+    [string]$InstallBin = (Join-Path $env:LOCALAPPDATA "figma-cli\bin"),
+
+    # Dry run — print the actions without copying or mutating PATH.
+    [switch]$WhatIf,
+
+    # Skip SHA-256 check (NOT recommended).
+    [switch]$SkipChecksum
 )
 
 $ErrorActionPreference = "Stop"
-$ReleaseApi = "https://api.github.com/repos/silships/figma-cli/releases/latest"
-$TempRoot = $null
 
-function Get-ReleaseMetadata {
-    param([string]$FixturePath)
-    if ($FixturePath) {
-        return Get-Content -Raw -LiteralPath $FixturePath | ConvertFrom-Json
-    }
-    return Invoke-RestMethod -Headers @{ "User-Agent" = "figma-skill-installer" } -Uri $ReleaseApi
+# ---------------------------------------------------------------------------
+# Resolve source / target paths
+# ---------------------------------------------------------------------------
+$ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Path
+$SkillRoot   = Split-Path -Parent $ScriptDir
+$SourceBin   = if ($SourceBin) { (Resolve-Path -LiteralPath $SourceBin).Path } else { (Join-Path $SkillRoot "bin") }
+$InstallBin  = if ($WhatIf) { $InstallBin } else { [Environment]::ExpandEnvironmentVariables($InstallBin) }
+
+$ExeSource   = Join-Path $SourceBin "figma-cli.exe"
+$DaemonSrc   = Join-Path $SourceBin "figma-daemon.exe"
+$ExeTarget   = Join-Path $InstallBin "figma-cli.exe"
+$DaemonTgt   = Join-Path $InstallBin "figma-daemon.exe"
+
+if (-not (Test-Path -LiteralPath $ExeSource)) {
+    throw "Source binary not found: $ExeSource. Make sure you are running this script from inside figma-skill/, or pass -SourceBin."
+}
+if (-not (Test-Path -LiteralPath $DaemonSrc)) {
+    throw "Source binary not found: $DaemonSrc. The daemon is required for figma-cli to talk to Figma."
 }
 
-function Get-InstallPlan {
-    param($Release, [string]$CpuArchitecture)
-    if ($Release.draft -or $Release.prerelease) {
-        throw "Latest metadata resolved to a draft or prerelease; refusing installation."
-    }
-    if ($Release.tag_name -notmatch '^v?(\d+\.\d+\.\d+)$') {
-        throw "Release tag '$($Release.tag_name)' is not a stable semantic version."
-    }
-
-    $version = ($Release.tag_name -replace '^v', '')
-    $archPattern = if ($CpuArchitecture -eq "ARM64") { 'arm64|aarch64' } else { 'x64|amd64' }
-    $asset = @($Release.assets) | Where-Object {
-        $_.name -match '(?i)(windows|win32|win-)' -and
-        $_.name -match "(?i)($archPattern)" -and
-        $_.name -match '(?i)\.zip$'
-    } | Select-Object -First 1
-
-    if ($asset) {
-        return [ordered]@{
-            tagName = $Release.tag_name
-            version = $version
-            architecture = $CpuArchitecture
-            mode = "portable-zip"
-            downloadUrl = $asset.browser_download_url
-            assetName = $asset.name
-        }
-    }
-
-    if (-not $Release.zipball_url) {
-        throw "Stable Release has no compatible Windows asset and no zipball_url."
-    }
-    return [ordered]@{
-        tagName = $Release.tag_name
-        version = $version
-        architecture = $CpuArchitecture
-        mode = "source-archive"
-        downloadUrl = $Release.zipball_url
-        assetName = $null
-    }
-}
-
-function Invoke-CheckedCommand {
-    param([string]$Command, [string[]]$Arguments)
-    $output = & $Command @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Command $($Arguments -join ' ') failed: $($output -join [Environment]::NewLine)"
-    }
-    return ($output -join [Environment]::NewLine).Trim()
-}
-
-function Add-UserPathEntry {
-    param([string]$Entry)
-    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-    $entries = @($userPath -split ';' | Where-Object { $_ })
-    if ($entries -notcontains $Entry) {
-        $newPath = (@($Entry) + $entries) -join ';'
-        [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
-    }
-}
-
-function Refresh-ProcessPath {
-    $machine = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    $user = [Environment]::GetEnvironmentVariable("Path", "User")
-    $env:Path = "$machine;$user"
-}
-
-function Assert-ValidInstallRoot {
+# ---------------------------------------------------------------------------
+# Hash helper
+# ---------------------------------------------------------------------------
+function Get-FileHash256 {
     param([string]$Path)
-    $leaf = Split-Path $Path -Leaf
-    if ($leaf -ne "figma-cli") {
-        throw "REJECTED-INSTALLROOT: '$leaf' is not 'figma-cli'"
-    }
-    $parent = Split-Path $Path -Parent
-    if (-not $parent) {
-        throw "InstallRoot cannot be a filesystem root: $Path"
-    }
-    $broadParents = @(
-        [Environment]::GetFolderPath("ProgramFiles"),
-        [Environment]::GetFolderPath("ProgramFilesX86")
-    ) | Where-Object { $_ } | Select-Object -Unique
-    foreach ($bp in $broadParents) {
-        if ($Path -eq $bp) {
-            throw "InstallRoot cannot be a broad Programs directory: $Path"
-        }
+    $h = Get-FileHash -LiteralPath $Path -Algorithm SHA256
+    return $h.Hash.ToLower()
+}
+
+# ---------------------------------------------------------------------------
+# Pre-flight: if both files already match source hash, no-op.
+# ---------------------------------------------------------------------------
+$NeedsCopy = $true
+if ((Test-Path -LiteralPath $ExeTarget) -and (Test-Path -LiteralPath $DaemonTgt) -and -not $SkipChecksum) {
+    $srcExeHash    = Get-FileHash256 $ExeSource
+    $srcDaemonHash = Get-FileHash256 $DaemonSrc
+    $tgtExeHash    = Get-FileHash256 $ExeTarget
+    $tgtDaemonHash = Get-FileHash256 $DaemonTgt
+    if ($srcExeHash -eq $tgtExeHash -and $srcDaemonHash -eq $tgtDaemonHash) {
+        $NeedsCopy = $false
     }
 }
 
-function Get-FileSha256 {
-    param([string]$Path)
-    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
-}
-
-function Test-ChecksumMatch {
-    param([string]$ArchivePath, [string]$ChecksumPath, [string]$AssetName)
-    if (-not $ChecksumPath) {
-        Write-Host "[checksum] No TrustedChecksumPath provided; skipping SHA-256 verification."
-        return
-    }
-    if (-not (Test-Path -LiteralPath $ChecksumPath)) {
-        throw "TrustedChecksumPath not found: $ChecksumPath"
-    }
-    $checksums = Get-Content -Raw -LiteralPath $ChecksumPath | ConvertFrom-Json
-    if (-not $checksums.sha256) {
-        throw "TrustedChecksumPath JSON must contain a 'sha256' field."
-    }
-    $expected = $checksums.sha256
-    $actual = Get-FileSha256 -Path $ArchivePath
-    if ($actual -ne $expected) {
-        throw "SHA-256 mismatch for archive${AssetName}: expected $expected, got $actual"
-    }
-    Write-Host "[checksum] SHA-256 verified: $actual"
-}
-
-try {
-    Assert-ValidInstallRoot -Path $InstallRoot
-    if (-not $PlanOnly -and -not $SkipExistingCheck) {
-        $existing = Get-Command figma-cli -ErrorAction SilentlyContinue
-        if ($existing) {
-            $existingVersion = Invoke-CheckedCommand -Command "figma-cli" -Arguments @("--version")
-            Invoke-CheckedCommand -Command "figma-cli" -Arguments @("--help") | Out-Null
-            Write-Host "figma-cli $existingVersion is already installed and responds correctly."
-            exit 0
-        }
-    }
-
-    $release = Get-ReleaseMetadata -FixturePath $ReleaseMetadataPath
-    $plan = Get-InstallPlan -Release $release -CpuArchitecture $Architecture
-
-    if ($plan.mode -eq "portable-zip" -and $TrustedChecksumPath) {
-        $plan["checksumSource"] = "trusted-checksum-path"
-    } elseif ($plan.mode -eq "portable-zip") {
-        $plan["checksumSource"] = "none"
+if ($WhatIf) {
+    Write-Host "[whatif] Source: $SourceBin"
+    Write-Host "[whatif] Target: $InstallBin"
+    if ($NeedsCopy) {
+        Write-Host "[whatif] Would copy figma-cli.exe + figma-daemon.exe"
     } else {
-        $plan["checksumSource"] = "none-binary-unavailable"
+        Write-Host "[whatif] Source bytes already match target — would skip copy"
     }
-
-    if ($PlanOnly) {
-        $plan | ConvertTo-Json -Compress
-        exit 0
-    }
-
-    $TempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("figma-cli-" + [guid]::NewGuid())
-    $archive = Join-Path $TempRoot "release.zip"
-    $expanded = Join-Path $TempRoot "expanded"
-    New-Item -ItemType Directory -Path $expanded -Force | Out-Null
-    if ($plan.downloadUrl -match '^file://') {
-        $localPath = $plan.downloadUrl -replace '^file://', ''
-        if (-not (Test-Path -LiteralPath $localPath)) {
-            throw "Local archive not found: $localPath"
-        }
-        Copy-Item -LiteralPath $localPath -Destination $archive -Force
-    } else {
-        Invoke-WebRequest -UseBasicParsing -Headers @{ "User-Agent" = "figma-skill-installer" } -Uri $plan.downloadUrl -OutFile $archive
-    }
-    Test-ChecksumMatch -ArchivePath $archive -ChecksumPath $TrustedChecksumPath -AssetName $plan.assetName
-    Expand-Archive -LiteralPath $archive -DestinationPath $expanded -Force
-
-    if ($plan.mode -eq "portable-zip") {
-        $executables = @(Get-ChildItem -LiteralPath $expanded -Recurse -File -Filter "figma-cli.exe")
-        if ($executables.Count -ne 1) {
-            throw "Expected exactly one figma-cli.exe in the Release asset; found $($executables.Count)."
-        }
-        if (Test-Path -LiteralPath $InstallRoot) {
-            Remove-Item -LiteralPath $InstallRoot -Recurse -Force
-        }
-        New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
-        Copy-Item -Path (Join-Path $executables[0].Directory.FullName "*") -Destination $InstallRoot -Recurse -Force
-        Add-UserPathEntry -Entry $InstallRoot
-    } else {
-        Write-Host "[checksum] Source archive mode — no binary to checksum; relying on package name/version validation."
-        $nodeVersion = Invoke-CheckedCommand -Command "node" -Arguments @("--version")
-        if ($nodeVersion -notmatch '^v(\d+)\.') {
-            throw "Could not parse Node.js version '$nodeVersion'."
-        }
-        if ([int]$Matches[1] -lt 18) {
-            throw "figma-cli requires Node.js >=18; found $nodeVersion."
-        }
-        Invoke-CheckedCommand -Command "npm" -Arguments @("--version") | Out-Null
-
-        $roots = @(Get-ChildItem -LiteralPath $expanded -Directory)
-        if ($roots.Count -ne 1) {
-            throw "Expected one source root in the Release archive; found $($roots.Count)."
-        }
-        $packagePath = Join-Path $roots[0].FullName "package.json"
-        if (-not (Test-Path -LiteralPath $packagePath)) {
-            throw "Release source archive does not contain a root package.json."
-        }
-        $package = Get-Content -Raw -LiteralPath $packagePath | ConvertFrom-Json
-        if ($package.name -ne "figma-ds-cli") {
-            throw "Unexpected package name '$($package.name)'; expected 'figma-ds-cli'."
-        }
-        if ($package.version -ne $plan.version) {
-            throw "Package version '$($package.version)' does not match Release '$($plan.version)'."
-        }
-        Invoke-CheckedCommand -Command "npm" -Arguments @("install", "--global", $roots[0].FullName) | Out-Null
-    }
-
-    Refresh-ProcessPath
-    $installedVersion = Invoke-CheckedCommand -Command "figma-cli" -Arguments @("--version")
-    Invoke-CheckedCommand -Command "figma-cli" -Arguments @("--help") | Out-Null
-    if (($installedVersion -replace '^v', '') -ne $plan.version) {
-        throw "Installed figma-cli version '$installedVersion' does not match Release '$($plan.version)'."
-    }
-    Write-Host "Installed and verified figma-cli $installedVersion from $($plan.tagName)."
-    exit 0
-} catch {
-    Write-Error "figma-cli installation failed: $($_.Exception.Message)"
-    exit 1
-} finally {
-    if ($TempRoot -and (Test-Path -LiteralPath $TempRoot)) {
-        Remove-Item -LiteralPath $TempRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    Write-Host "[whatif] Would ensure $InstallBin is on user PATH (idempotent)"
+    return
 }
+
+# ---------------------------------------------------------------------------
+# Copy
+# ---------------------------------------------------------------------------
+if ($NeedsCopy) {
+    New-Item -ItemType Directory -Force -Path $InstallBin | Out-Null
+    Copy-Item -LiteralPath $ExeSource  -Destination $ExeTarget  -Force
+    Copy-Item -LiteralPath $DaemonSrc -Destination $DaemonTgt  -Force
+    Write-Host "Copied figma-cli.exe + figma-daemon.exe -> $InstallBin"
+} else {
+    Write-Host "Source bytes match target — nothing to copy."
+}
+
+# ---------------------------------------------------------------------------
+# PATH update (user scope, [Environment]::SetEnvironmentVariable, idempotent)
+# ---------------------------------------------------------------------------
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+$entries  = @($userPath -split ';' | Where-Object { $_ })
+
+if ($entries -notcontains $InstallBin) {
+    $newPath = (@($InstallBin) + $entries) -join ';'
+    [Environment]::SetEnvironmentVariable("Path", $newPath, "User")
+    Write-Host "Added $InstallBin to user PATH."
+    Write-Host "(New shells will pick this up automatically; already-open shells need to be restarted or read the new PATH manually.)"
+} else {
+    Write-Host "$InstallBin already on user PATH."
+}
+
+# ---------------------------------------------------------------------------
+# Post-install sanity check
+# ---------------------------------------------------------------------------
+$postExeHash    = Get-FileHash256 $ExeTarget
+$postDaemonHash = Get-FileHash256 $DaemonTgt
+Write-Host ""
+Write-Host "Installed:"
+Write-Host "  $ExeTarget  (sha256=$postExeHash)"
+Write-Host "  $DaemonTgt  (sha256=$postDaemonHash)"
+Write-Host ""
+Write-Host "Next steps:"
+Write-Host "  1. Open a NEW shell (so PATH is re-read)."
+Write-Host "  2. Run: figma-cli --version"
+Write-Host "  3. Run: figma-cli --help"
+Write-Host "  4. Run: figma-cli daemon status"
+Write-Host "  5. If daemon is not running: figma-cli connect"
