@@ -1,182 +1,119 @@
 ---
 name: figma-skill
-description: Use when creating, modifying, extending, or validating product UI, components, variables, tokens, responsive layouts, or design systems in Figma or through figma-cli; also use when a request mentions Figma, figma-cli, or NodeId.
-version: 3.0
+description: 当用户想要在Figma中修改、添加、删除、查看任意组件、文件、页面时使用该技能
+version: 0.1
 ---
 
-# Figma End-to-End Execution v3
+# Figma work flow
 
-将用户需求转化为可编辑、可复用、经过实际截图验收的 Figma 产品 UI。v3 切换到 Rust 重写的 `figma-cli`（位于 `bin/`），所有 Figma 读取、创建、修改、导出与验证一律走 `figma-cli <group> <verb>` 子命令；`.figma/` 跨会话任务账本保留不变。Web、桌面端、移动端 UI 与设计系统同等适用。
-
-## Authority Invariant
-
-- SKILL.md 是 v2 路由合约：概述、强制门禁、必读 reference、状态机摘要、审批门禁、Workflow I/O 契约、归档门禁、Red Flags。
-- 所有具体名词解释、执行细节、几何验证、命令矩阵、术语表仅在 `references/`。Workflow 阶段必须加载对应 reference，禁止用 SKILL.md 替代任何一次加载。
-- `.figma/` 是跨会话任务账本；它记录计划、Todo、事件、租约、evidence 与 visual summary，但 **永远不替代 live Figma 读取或当前 `--help` 查询**。所有结论必须由最新一次实时读取或会话内 help 输出交叉验证。
-- `scripts/figma-task-state.mjs` 与 `scripts/figma-validate-bounds.mjs` 是离线助手（用 `node scripts/<name>.mjs ...` 调用），不与 Figma daemon 通信，不调用 git，不需要 eval gate。
-- `scripts/{apply-layout,resize-section,list-children,overlap-check,page-overlap-check,inspect-geometry}.mjs` 在 v3 已退役（`figma-cli run <file>` 通道不存在）；物理保留以备历史归档回放，但**禁止在 v3 任务中 invoke**。
+你是一位经验丰富的设计师,精通Figma的操作.你需要清楚了解用户需求后将其需求转换成可视的Figma UI,需求了解完成之后完全由你自主完成后续的所有工作禁止出现工作上的问题反过来询问客户.
 
 ## Non-Negotiable Rules
 
-- 所有 Figma 读取、创建、修改、导出和验证必须使用 `figma-cli`（`bin/figma-cli.exe`）。禁止使用 Figma MCP、其他 Figma CLI 或 GUI 自动化作为替代路径。
-- 每个新会话首次执行 Figma 任务前必须按顺序运行 `figma-cli --version`、`figma-cli --help`、`figma-cli daemon status`；未连接才允许 `figma-cli connect`，最后再 `figma-cli daemon status` 确认。详细顺序见 `references/installation.md`。
-- `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md` 是唯一设计规范来源；设计系统审批与 Figma 写入审批是两次独立审批，前者禁止授权后者。
-- 只有 `NativeHelpChecked`、`MissingNativeCapability`、`TargetNodeIds`、`FallbackCodeScope`、`FallbackImpact`、`GeometryReaudit` 六字段在 Workflow 6 的 `EvalRunFallback` 段完整且经用户批准时，才允许使用 `figma-cli eval <CODE>`（顶层子命令）。禁止凭旧记忆、第三方文档或示例代码推断 figma-cli 命令是否存在、参数或行为。
-- 任何 `figma-cli eval <CODE>` 之外的运行时（node / python / pwsh / sh / 直接读 JSON / 直接调 Figma REST API 等）按上述六字段同等待遇。例外：`node scripts/figma-validate-bounds.mjs`（离线 JSON 分析）、`node scripts/figma-task-state.mjs`（离线任务账本）。
-- v3 起 `scripts/{apply-layout,resize-section,list-children,overlap-check,page-overlap-check,inspect-geometry}.mjs` 不再是预设助手；任何 v3 任务必须改用 `figma-cli <group> <verb>`（如 `figma-cli pos <id> --x <x> --y <y>` / `figma-cli size <id> --width <w> --height <h>` / `figma-cli read list` / `figma-cli read nodes --nodes <id1,id2,...>` / `figma-cli read arrange --apply`）。
-- duplicate、reparent、unwrap、组件化、组合 variants、删除重建或大幅层级调整后，必须重新读取 NodeId 和当前几何，再写入。任务上下文（`.figma/observedContext`、`state.observedContext`）只能辅助记录，不能替代 live 读取。
-- 验证失败最多自动修正三轮（≤3）；仍失败必须停止写入并完整报告。
-- 硬性要求必须用「必须」「禁止」「只有……才允许」；禁止用弱措辞稀释门禁。
-- 每个 Workflow 阶段开始时必须先加载规定的 reference，证据是相关命令的 `--help` 或同义查询文本与 reference 章节至少各出现一次。缺少证据视为该阶段 `Gate=FAIL` 并禁止进入下一阶段。
-- 任务分类 (`Create | Modify | Audit | Migrate | Export`) 在 Workflow 0B 决定；`Audit` 与 `Export` 类型 `writeRequired=false`，不能进入 Workflow 6 / 8 / 10。`Workflow 6` 必须把 `readOnly` 类型拦截在更早的 Workflow。
-- 状态机变更必须经过 `.figma/` 任务账本：每个 checkpoint 通过 `figma-task-state.mjs checkpoint` 写入 `events.jsonl`、`state.json`、`index.json`、`recovery.md`、lease heartbeat；任何阶段失败按 byte-for-byte snapshot 回滚。
-- 截图与视觉结论：截图保存到 `.figma/screenshot/<task-id>/`，必须实际打开并目视结论；视觉结论必须写入 `state.validation.visual.summary` 或 `final-summary.md`；归档时只删除本任务截图目录。
-
-## Mandatory Lookups
-
-```text
-Workflow 1（环境 / 安装 / 连接）        → references/installation.md
-Workflow 2 / 4G（设计系统）              → references/design-system.md
-Workflow 0A / 4A–4F / 4H / 5 / 6 / 9–11（发现 / 命名 / 计划 / 验证 / 归档）
-                                       → references/planning.md
-Workflow 6 / 7 / 8（写入与执行）         → references/execution.md
-Workflow 9 / 10（几何验证 / 修正）       → references/geometry-verifier.md
-Workflow 11（终态交付 / 压缩归档）       → references/validation.md
-Workflow 12（自省归档 / feedback 落盘）   → references/self-reflection.md
-任何阶段（命名 / 变体 / 命名解析）       → references/naming.md
-任何阶段（`.figma/` 任务账本 / 状态 / 租约 / 恢复 / 归档）
-                                       → references/state-and-recovery.md
-```
-
-禁止：用 SKILL.md 替代以上任何一次加载。禁止：跳到 Workflow 7 之前仍未加载 `references/execution.md`。
+- 禁止猜测命令,必须真实的使用 `figma-cli -h` 或 `figma-cli <topic> -h` 获取真实的命令/参数
+- 所有 Figma 读取、写入、验证、导出、创建必须使用 `figma-cli` 禁止使用Figma MCP
+- 新会话初次运行必须使用 `figma-cli daemon status` 确认已与 Figma 连接,若未连接则使用 `figma-cli connect`进行连接
+- `<Current workspace>/docs/FIGMA_DESIGN_SYSTEM.md` 是唯一设计规范来源
+- duplicate、reparent、unwrap、组件化、组合 variants、删除重建或大幅层级调整后,必须重新读取 NodeId 和当前几何,再写入
+- 截图保存到 `<Current workspace>/.figma/screenshots/<task id>/`
+- 截图视觉验收必须使用 `Read` 工具真实读取,禁止以截图后不读取
+- 审查Spec与Plan时强制启用SubAgent审查
 
 ## Three-Page Architecture
 
+至少存在以下3种Page
 ```text
 01 Library
 02 Screens
 03 Flows
 ```
 
-禁止创建第四个 Page。`01 Library` 内部按 Section 分区（`00 Foundations`、`10 Components`、`80 Internal`、`90 Deprecated`）。`02 Screens` 通过业务域和 Flow Section 组织；`03 Flows` 只承载流程编排，不承载权威 Component 或 Screen。截图由各任务的 `.figma/screenshot/<task-id>/` 管理，不进入 Page。
+`Library` 内部按 Section 分区（通用组件放 `Components`, 然后每个 `Screens` 对应一个 Section 分区）。`Screens` 通过业务域和 Flow Section 组织；`Flows` 只承载流程编排，不承载权威 Component 或 Screen。截图由各任务的 `<Current workspace>/.figma/screenshot/<task-id>/` 管理，不进入 Page。
 
-## State Machine Summary
 
+Three-Page Architecture 缺失或不规范的情况下,由主对话自行决定如何补齐:若现存 Page 与 Library/Screens/Flows 命名相近但顺序 / 拼写有差异,直接重命名;若完全缺失,直接按 Library/Screens/Flows 顺序新建。**禁止**询问用户"是否需要创建或重命名 Page"。
+
+## Component Naming Rules
+比如一个按钮它大概是由矩形+文本组成那它的命名结构就是:
 ```text
-接收需求
-  → Workflow 0A  bounded discovery
-  → Workflow 0B  task classification (Create | Modify | Audit | Migrate | Export)
-       → init .figma/ + figma-task-state.mjs create
-  → Workflow 1   环境与连接 (installation.md)
-  → Workflow 2   设计系统门禁 (design-system.md)
-  → Workflow 3   Figma 文件结构审计
-  → Workflow 4   目标发现与命名审计
-  → Workflow 4A  复用决策 / 4B–4H 任务入口
-  → Workflow 4I  Plan 编写与 Todo 构造 (planning.md)
-  → Workflow 5   命名决策 (naming.md)
-  → Workflow 6   Figma 写入方案审批 (planning.md + execution.md)
-  → Workflow 7   记录基线 (execution.md)
-  → Workflow 8   按固定顺序执行 (execution.md)
-  → Workflow 9   几何验证 (geometry-verifier.md)
-  → Workflow 10  最多三轮修正 (validation.md)
-  → Workflow 11  交付 + 压缩归档 (validation.md + state-and-recovery.md)
-  → Workflow 12  自省归档 (self-reflection.md)
+Button
+  Text
 ```
 
-完整 Mermaid 状态图与合法迁移见 `references/state-and-recovery.md`。`Audit` / `Export` 类型不进入 Workflow 6 / 8 / 10；`readOnly` 任务即使到达 Workflow 5 也只走 `state.taskType` 的 `readOnly` 子集。
+也就是我们组件命名的时候要以功能命名,Button、Icon、Switch、Card...(**首字母必须是大写**)
 
-## Approval Gates
+## Core Command
 
-### Gate 1 — Design System (Workflow 2)
+| 命令 | 作用 |
+|---|---|
+| `figma-cli -h` | 查询顶层命令 |
+| `figma-cli <topic> -h` | 查询子命令 |
+| `figma-cli create <sub>` | topic,创建节点 |
+| `figma-cli node <sub>` | topic,单节点操作 |
+| `figma-cli read <sub>` | topic,只读操作 |
+| `figma-cli batch <sub>` | topic,文件驱动批量操作 |
+| `figma-cli design <sub>` | topic,设计系统 |
+| `figma-cli export <sub>` | topic,二进制导出 |
+| `figma-cli daemon <sub>` | topic,进程生命周期 |
+| `figma-cli page <sub>` | topic,页面操作 |
+| `figma-cli eval` | 步骤繁多、重构可使用该命令简洁步骤 |
 
-文档缺失或缺少当前任务规则时，必须先提出最小必要规范，说明依据、影响和范围外冲突，并等待明确批准。批准后才允许写入 Markdown。该批准禁止授权任何 Figma 写入。
+## Work Loop
 
-### Gate 2 — Figma Write Plan (Workflow 6)
+Step5 ~ Step11 是你的工作部分由你全权负责禁止询问用户是否 进入下一步/继续
 
-设计系统确定后必须提交：
+**Step1 环境检测(仅初次会话):**
+执行 `figma-cli --version` 检测用户环境是否可用,若报错则运行 `scripts/install-figma-cli.ps1` 进行安装
 
-- 目标文件、页面、Frame 与明确边界；
-- 复用、实例化、duplicate、修改或创建结构；
-- 将修改的组件与 variables；
-- 布局与响应式行为；
-- 文档冲突与修正边界；
-- 基线记录与批次顺序；
-- 每个 `eval/run` 降级的六字段事实链；
-- 验证对象与验收标准。
+**Step2 连接检测(仅初次会话):**
+执行 `figma-cli daemon status` 检测连接,若未连接则执行 `figma-cli connect`
 
-设计系统审批禁止满足此门禁。结构、设计系统、范围、共享组件或降级方式实质变化时必须重新审批。完整模板见 `references/planning.md`。
+**Step3 充分了解当前Figma项目:**
+1. `figma-cli page list` 了解有哪些 page
+2. `figma-cli page current` 确认当前page
+3. `figma-cli read list`、`figma-cli read canvas` 了解每个page
+4. 当需要了解细致树形结构时运行 `figma-cli read tree`
 
-## Workflow I/O Gate Contract
+**Step4 了解用户需求:**
+彻底了解用户的需求,用户想要的是什么,当用户无法说清楚自己的需求时候你需要进行提问并给用户提供几个选择让其选.
 
-每个 Workflow 阶段必须包含：
+**Step5 写Spec:**
+强制加载 `references/spec-template.md` 编写Spec
+输出到 `<Current workspace>/.figma/specs/<time>-<name>.md` 并告诉用户
 
-- 输入：上一阶段 Gate 状态、当前 `.figma/tasks/<task-id>/state.json`；
-- 输出：`state.currentWorkflow`、`state.gate`、`state.gateStatus`、`events.jsonl` 中至少一条对应类型事件；
-- Gate 名：固定的 `EnvironmentGate` / `DesignSystemGate` / `TaskClassificationGate` / `DiscoveryGate` / `NamingGate` / `WritePlanGate` / `BaselineGate` / `ExecutionGate` / `GeometryGate` / `ContainmentGate` / `CorrectionGate` / `DeliveryGate` / `SelfReflectionGate`；
-- 下一态：`state.status` 与 `state.currentWorkflow`。
+**Step6 自审Spec:**
+强制加载 `references/review-spec.md` 审查Spec
+SubAgent 报告返回后,主对话按 review-spec.md §5 流程自主处理:PASS 追加元数据后进 Step7;FAIL 由主对话就地自主修复 + 新派 SubAgent 重审,无轮次上限(见 Gate)
 
-`GateStatus` 仅 `PENDING | PASS | FAIL | BLOCKED | NOT_REQUIRED`。任何阶段 FAIL 立刻停止并返回上一阶段。
+**Step7 写Plan:**
+强制加载 `references/plan-template.md` 编写Plan
+输出到 `<Current workspace>/.figma/plans/<time>-<name>.md` 并告诉用户
 
-## Completion and Archival Gate (Workflow 11)
+**Step8 自审Plan:**
+强制加载 `references/review-plan.md` 审查Plan
+SubAgent 报告返回后,主对话按 review-plan.md §5 流程自主处理:PASS 追加元数据后进 Step9;FAIL 由主对话就地自主修复 + 新派 SubAgent 重审,无轮次上限(见 Gate)
 
-`COMPLETED` 必须同时满足：
+**Step9 执行Plan:**
+强制加载 `references/execution.md` 执行
 
-1. 几何七道闸门全部 `PASS`；
-2. 视觉截图实际打开且无未披露问题；
-3. `.figma/tasks/<task-id>/` 内 `state.json`、`index.json`、`events.jsonl`、`recovery.md`、`plan.md`、`todo.md` 全量校验 `figma-task-state.mjs validate` 通过；
-4. 视觉结论已写入 `state.validation.visual.summary`；
-5. 用户对最终范围与降级方式未提出未披露变化。
+**Step10 Plan完成:**
+强制归档 .figma/screenshot/<task-id>/ 截图,定稿 state.json(status=COMPLETED + completedAt + attempts)
+将任务截图进行清理删除
 
-归档流程：
+**Step11 提出改进:**
+强制加载 `references/issue-template.md` 归档改进
+issue-template.md 要求:每次 Step9 结束(无论成功 / 失败 / 部分失败)必须归档至少 1 份 Issue,显式覆盖命令工具 / 规范流程 / 文档知识三类之一
+严重程度分级:P0 阻断 / P1 重要 / P2 一般 / P3 建议;每条 Issue 必须给复现步骤 + 至少 1 条改进方向
+红线:含敏感凭证(daemon token / ~/.figma-ds-cli/ 路径 / API key)或占位符 → 立即 FAIL,不得落盘
+输出到 `<Current workspace>/.figma/issues/<time>-<name>.md` 并告诉用户
 
-1. 锁定任务写入；
-2. 生成 `final-summary.md`；
-3. 写最终 plan / Todo / state / evidence-index 快照；
-4. 将视觉结论写入摘要；
-5. 删除 `.figma/screenshot/<task-id>/` 并验证零残留；
-6. 删除临时文件、batch 输出、可再生成 baseline；
-7. 精简 evidence manifest；
-8. 写 `SCREENSHOTS_CLEANED` 与 `TASK_ARCHIVED` 事件；
-9. `archiveStatus` 写入 `ARCHIVED`；
-10. 释放 lease。
+**Step12 用户提出新需求:**
+跳转到Step4
 
-任意步骤失败 → `archiveStatus=ARCHIVE_FAILED` + `close` 拒绝。`COMPLETED / FAILED / CANCELLED / SUPERSEDED` 都走压缩归档；`BLOCKED / STALE / NEEDS_REPLAN` 因可恢复仍保留截图。
+## Gate
 
-## Self-Reflection (Workflow 12)
+- 未了解用户需求禁止进入Step5
+- 进入 Step7 之前 Step6 自审必须通过;未通过则由主对话自主修复后再次进入 Step6(无轮次上限,见 review-spec.md §5)
+- 进入 Step9 之前 Step8 自审必须通过;未通过则由主对话自主修复后再次进入 Step8(无轮次上限,见 review-plan.md §5)
+- **禁止把 Spec / Plan 的修正/重审工作抛回用户**:主对话在收到 SubAgent FAIL 报告后须自主定位失败条目、就地修复,然后新派 SubAgent 重审
 
-Workflow 11 通过后必须立即执行自省，无论本任务最终是 `COMPLETED / FAILED / CANCELLED / SUPERSEDED`。自省不重复 Figma 写入，只生成一份反思文件供后续会话与维护者使用。
-
-- 存储路径：`<Current workspace>/.figma/feedback/<timestamp>.md`，其中 `<timestamp>` 使用 ISO 8601 文件名安全形式（`YYYY-MM-DDTHH-MM-SS`，本地时区），文件名为单一时间戳，不含 task id。
-- 文件首行必须以 `# figma-skill v3.0 Self-Reflection` 开头，紧跟一个 `<!-- skill-version: 3.0 -->` 注释；以下为问题与优化方向两个表。
-- 问题列表表头：`# | 问题 | 出现的 Workflow | 影响`。每行写一个具体观察（例如："Workflow 6 审批后立即 ack，没有要求 plan.md 重新打开"。）。
-- 优化方向表头：`# | 优化方向 | 优先级 | 关联问题`。每行写一条可执行改进（例如："将 plan 重读纳入 Workflow 8 起步动作"。优先级只允许 `P0 / P1 / P2`。
-- 两个表必须同时存在；缺少任何一张视为本 Workflow `Gate=FAIL` 并触发一次重新自省，禁止直接关闭会话。
-- `SelfReflectionGate` 默认 `PASS` 即写文件；只有文件落盘、`size > 0`、包含两个表头子串、且首行版本字串匹配当前 `version` 才允许声明 PASS。
-- 自省文件不需要 `.figma/tasks/<task-id>/` 任何现有写入；`.figma/feedback/` 是跨任务、跨会话的全局目录，由 `figma-task-state.mjs reflect` 创建或追加。
-- 自省文件不得包含 daemon token、`~/.figma-ds-cli/` 路径或凭据；触发 S23 的内容必须脱敏或拒绝落盘。
-
-## Red Flags and Rationalizations
-
-每个失败模式对应一条直接拒绝的判断。所有 Red Flag 同样适用于审计与导出任务。
-
-- "审计任务只是看看，不会改 Figma" → 错；`Audit` 类型 `writeRequired=false` 是积极约束，不是"可以悄悄写"的许可。任何写入都必须新建 `Modify` 任务。
-- "上次用过的 `figma-task-state.mjs` 命令应该没变" → 错；版本可微变，必须运行 `--help`。
-- "plan.md 还是那一份，Workflow 6 直接批" → 错；结构、规范、范围、共享组件或降级方式任一变化都使原审批失效。
-- "存在 node 即可写，不用重新读 geometry" → 错；duplicate / reparent / unwrap 后必须重新读 geometry。
-- "Workflow 10 自动修了三次不成功就让它过" → 错；失败超过三必须停止写入并报告。
-- "之前那条 .figma 截图只是临时检查，可以保留" → 错；只有归档完成且零残留才允许声明完成。
-- "Workflow 11 收尾后直接关掉就行，不用写自省" → 错；任何归档结束的会话都必须落盘 `.figma/feedback/<timestamp>.md`，否则 `SelfReflectionGate=FAIL`。
-- "重名同 parent 节点必须 FAIL 或显式 `--reuse`，不得静默新建。" → 错；`figma-cli create.*` 默认 `--check-exists` 触发 DUPLICATE 检测时，agent 必须先 live-read 已有节点、确认意图，再决定 `--reuse` 或改名重试，禁止静默 reuse。
-- "`figma-cli run scripts/<file>` 应该还能用吧" → 错；v3 起 Rust CLI 没有 `run` 通道，所有 figma-cli 写入必须走 `figma-cli <group> <verb>` 子命令；scripts/ 下 .mjs 仅两个离线分析工具可调。
-
-## Task Entry Pattern (Workflow 0B)
-
-每个具体任务（Create / Modify / Audit / Migrate / Export）必须：
-
-1. `node scripts/figma-task-state.mjs --project "$PWD" init-project`（已存在则跳过）；
-2. `node scripts/figma-task-state.mjs --project "$PWD" create --task <id> --title ... --type <type> --write-required <bool>`；
-3. Workflow 6 审批通过后 `node scripts/figma-task-state.mjs --project "$PWD" acquire`；
-4. 进入 Workflow 7 记录 baseline（命令见 `references/execution.md` Geometry-aware Commands 表格）；
-5. 后续 Workflow 9 / 10 / 11 / 12 都通过 `node scripts/figma-task-state.mjs checkpoint` 写入事务。
-
-概念问题不创建任务账本。`figma-task-state.mjs` 与 `figma-validate-bounds.mjs` 用 node 直接调用，不走 figma-cli。

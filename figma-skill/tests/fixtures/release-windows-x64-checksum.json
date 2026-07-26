@@ -1,5 +1,0 @@
-{
-  "assetName": "figma-cli-v2.2.0-windows-x64.zip",
-  "sha256": "1e51d4ec21e9ec448824bd0f9cdaf3e89f31403e7e0d55b16a274b84d5d434a5",
-  "_contract": "The 'sha256' field is the expected SHA-256 hex digest of the asset named by 'assetName'. Tests that supply their own zip payload compute an actual hash at runtime and write a temporary checksum JSON following this same schema, then pass -TrustedChecksumPath pointing to it. The hash in this fixture matches the content of release-windows-x64.json and serves as a deterministic example — real installations must use checksums published by the release author."
-}

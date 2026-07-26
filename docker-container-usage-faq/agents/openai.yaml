@@ -1,7 +1,0 @@
-interface:
-  display_name: "Docker 容器使用 FAQ"
-  short_description: "Docker 容器日常使用、配置、排障与常见问题指南"
-  default_prompt: "Use $docker-container-usage-faq to diagnose a Docker container startup or networking issue."
-
-policy:
-  allow_implicit_invocation: true
